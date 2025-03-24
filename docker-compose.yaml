@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  fsvchart-notify:
+    build:
+      context: .                # 上下文指向项目根目录
+      dockerfile: build/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      # 如果需要在容器外配置 config.yaml，可在这里映射
+      - ./config.yaml:/app/config.yaml
+      # 如果需要数据库持久化，可映射 data 目录
+      # - ./data:/app/data
+    environment:
+      # 可在这里定义一些运行时环境变量
+      - DB_FILE=/app/data/app.db
+    restart: unless-stopped
