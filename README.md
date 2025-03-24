@@ -1,6 +1,5 @@
 # FSVChart Notify
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/jicki/fsvchart-notify)](https://goreportcard.com/report/github.com/jicki/fsvchart-notify)
 [![License](https://img.shields.io/github/license/jicki/fsvchart-notify)](https://github.com/jicki/fsvchart-notify/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/jicki/fsvchart-notify)](https://github.com/jicki/fsvchart-notify/releases)
 
