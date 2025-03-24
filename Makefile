@@ -90,9 +90,9 @@ docker:
 	@echo "=> Reading version from VERSION file..."
 	$(eval VERSION := $(shell cat VERSION))
 	@echo "=> Building Docker image with tag: $(VERSION)..."
-	docker build --build-arg VERSION=$(VERSION) -t reg.deeproute.ai/deeproute-public/$(PROJECT_NAME):$(VERSION) -f build/Dockerfile .
+	docker build --build-arg VERSION=$(VERSION) -t $(PROJECT_NAME):$(VERSION) -f build/Dockerfile .
 	@echo "=> Tagging as latest as well..."
-	docker tag reg.deeproute.ai/deeproute-public/$(PROJECT_NAME):$(VERSION) reg.deeproute.ai/deeproute-public/$(PROJECT_NAME):latest
+	docker tag $(PROJECT_NAME):$(VERSION) $(PROJECT_NAME):latest
 
 # -----------
 # 清理
