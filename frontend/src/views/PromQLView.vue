@@ -20,15 +20,7 @@
       </div>
       <div class="form-group">
         <label>PromQL 查询:</label>
-        <div class="query-input-container">
-          <textarea 
-            v-model="newPromQL.query" 
-            placeholder="PromQL 查询语句" 
-            class="query-textarea"
-            @input="autoAdjustHeight"
-            ref="queryTextarea"
-          ></textarea>
-        </div>
+        <textarea v-model="newPromQL.query" placeholder="PromQL 查询语句" rows="5"></textarea>
       </div>
       <div class="form-actions">
         <button @click="savePromQL">保存</button>
@@ -64,7 +56,7 @@
             <td>{{ promql.description }}</td>
             <td>
               <div class="query-cell">
-                <pre class="query-content">{{ promql.query }}</pre>
+                {{ promql.query }}
               </div>
             </td>
             <td>{{ formatDate(promql.created_at) }}</td>
@@ -82,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { get, post, put, del } from '../utils/api'
 
 const emit = defineEmits(['promql-updated'])
@@ -109,16 +101,6 @@ const newPromQL = ref({
   query: '',
   category: ''
 })
-
-// 添加自动调整高度的方法
-const queryTextarea = ref<HTMLTextAreaElement | null>(null)
-
-const autoAdjustHeight = () => {
-  if (queryTextarea.value) {
-    queryTextarea.value.style.height = 'auto'
-    queryTextarea.value.style.height = queryTextarea.value.scrollHeight + 'px'
-  }
-}
 
 // 获取所有 PromQL 查询
 const fetchPromQLs = async () => {
@@ -183,11 +165,6 @@ const editPromQL = (promql: PromQL) => {
   }
   isEditing.value = true
   showAddForm.value = true
-  
-  // 等待 DOM 更新后调整高度
-  nextTick(() => {
-    autoAdjustHeight()
-  })
 }
 
 // 删除 PromQL 查询
@@ -320,65 +297,10 @@ onUnmounted(() => {
   margin-top: 20px;
 }
 
-.query-input-container {
-  position: relative;
-  width: 100%;
-}
-
-.query-textarea {
-  width: 100%;
-  min-height: 80px;
-  padding: 8px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
-  font-size: 14px;
-  line-height: 1.5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  resize: none;
-  overflow-y: hidden;
-  background-color: #f8f9fa;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.query-textarea:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-  outline: none;
-}
-
 .query-cell {
-  position: relative;
-  max-width: none;
-  overflow: visible;
-}
-
-.query-content {
-  margin: 0;
-  padding: 8px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow-x: auto;
-}
-
-/* 添加悬停效果 */
-.query-cell:hover .query-content {
-  background-color: #e9ecef;
-}
-
-/* 适配移动设备 */
-@media (max-width: 768px) {
-  .query-textarea {
-    font-size: 13px;
-  }
-  
-  .query-content {
-    font-size: 12px;
-    padding: 6px;
-  }
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

@@ -1169,9 +1169,9 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 	// 更新卡片中的元素
 	cardData["card"].(map[string]interface{})["elements"] = elements
 
-	// 打印最终的卡片数据用于调试
-	debugData, _ := json.MarshalIndent(cardData, "", "  ")
-	log.Printf("[SendFeishuStandardChart] 完整卡片数据:\n%s", string(debugData))
+	// // 打印最终的卡片数据用于调试
+	// debugData, _ := json.MarshalIndent(cardData, "", "  ")
+	// log.Printf("[SendFeishuStandardChart] 完整卡片数据:\n%s", string(debugData))
 
 	// 添加图表数据统计和诊断信息，增强问题排查能力
 	if chartConfig, ok := cardData["card"].(map[string]interface{})["elements"].([]map[string]interface{}); ok {

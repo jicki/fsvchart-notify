@@ -1158,7 +1158,7 @@ func deletePushTaskWebhook(c *gin.Context) {
 func runSingleTaskPush(db *sql.DB, taskID int64) {
 	// 获取任务详情
 	var sourceID int64
-	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL string
+	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL, customMetricLabel string
 	var step float64
 	var enabled int
 	var showDataLabel sql.NullInt64 // 使用 sql.NullInt64 来处理 NULL 值
@@ -1168,12 +1168,13 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	err := db.QueryRow(`
 		SELECT source_id, name, time_range, step, 
 		       card_title, card_template, metric_label, unit,
-		       button_text, button_url, enabled, COALESCE(show_data_label, 0) as show_data_label
+		       button_text, button_url, enabled, COALESCE(show_data_label, 0) as show_data_label,
+		       COALESCE(custom_metric_label, '') as custom_metric_label
 		FROM push_task 
 		WHERE id = ?
 	`, taskID).Scan(&sourceID, &name, &timeRange, &step,
 		&cardTitle, &cardTemplate, &metricLabel, &unit,
-		&buttonText, &buttonURL, &enabled, &showDataLabel)
+		&buttonText, &buttonURL, &enabled, &showDataLabel, &customMetricLabel)
 	if err != nil {
 		log.Printf("[scheduler] Error querying task: %v", err)
 		return
@@ -1193,8 +1194,8 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 		// 继续执行，不因更新时间失败而中断
 	}
 
-	log.Printf("[runSingleTaskPush] Processing task ID=%d, name=%s, time_range=%s, step=%v",
-		taskID, name, timeRange, step)
+	log.Printf("[runSingleTaskPush] Processing task ID=%d, name=%s, time_range=%s, step=%v, custom_metric_label=%s",
+		taskID, name, timeRange, step, customMetricLabel)
 
 	// 获取数据源URL
 	var sourceURL string
@@ -1339,6 +1340,8 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 		log.Printf("[runSingleTaskPush] Adjusting step to ensure at least 10 data points: %v -> %v",
 			calculatedStep, adjustedStep)
 		calculatedStep = adjustedStep
+		expectedPoints = float64(duration) / float64(adjustedStep)
+		log.Printf("[runSingleTaskPush] Final expected points: %.2f", expectedPoints)
 	} else if duration > 120*time.Hour && expectedPoints > 20 { // 对于超过5天的时间范围
 		// 增加日志以便于调试
 		log.Printf("[runSingleTaskPush] Long time range with many data points, might need prioritization")
@@ -1362,27 +1365,10 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 		// 获取数据点
 		log.Printf("[runSingleTaskPush] Fetching metrics for query %d: %s", i+1, query.Query)
-		// 确保指标标签(metricLabel)不为空，默认使用第一个标签作为系列名称
-		effectiveMetricLabel := metricLabel
-		if effectiveMetricLabel == "" {
-			effectiveMetricLabel = "instance" // 默认使用instance作为标签
-		}
+		log.Printf("[runSingleTaskPush] Using custom_metric_label: '%s', fallback metric_label: '%s'",
+			customMetricLabel, metricLabel)
 
-		// 检查是否有自定义指标标签
-		var customLabel string
-		err = db.QueryRow("SELECT custom_metric_label FROM push_task WHERE id = ?", taskID).Scan(&customLabel)
-		if err != nil || customLabel == "" {
-			customLabel = "" // 确保错误时为空字符串
-			log.Printf("[runSingleTaskPush] No custom metric label found or error: %v", err)
-		} else {
-			log.Printf("[runSingleTaskPush] Using custom metric label: '%s' - this will be used as a label name to extract values from metrics", customLabel)
-		}
-
-		// 记录从metrics中我们期望提取哪个标签
-		log.Printf("[runSingleTaskPush] Will extract values using either custom label '%s' or fallback to effectiveMetricLabel '%s'",
-			customLabel, effectiveMetricLabel)
-
-		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, calculatedStep, effectiveMetricLabel, customLabel)
+		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, calculatedStep, metricLabel, customMetricLabel)
 		if err != nil {
 			log.Printf("[runSingleTaskPush] Error fetching metrics for query %d: %v", i+1, err)
 			continue
@@ -1443,19 +1429,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 	// 检查是否找到了webhook
 	if len(webhooks) == 0 {
-		log.Printf("[runSingleTaskPush] No webhooks found for task ID=%d, checking if task has any webhooks", taskID)
-
-		// 检查任务是否有关联的webhook
-		var count int
-		err := db.QueryRow("SELECT COUNT(*) FROM push_task_webhook WHERE task_id = ?", taskID).Scan(&count)
-		if err != nil {
-			log.Printf("[runSingleTaskPush] Error checking webhook associations: %v", err)
-		} else if count == 0 {
-			log.Printf("[runSingleTaskPush] Task ID=%d has no associated webhooks in push_task_webhook table", taskID)
-		} else {
-			log.Printf("[runSingleTaskPush] Task ID=%d has %d webhook associations but none were retrieved", taskID, count)
-		}
-
+		log.Printf("[runSingleTaskPush] No webhooks found for task ID=%d", taskID)
 		return
 	}
 
@@ -1464,29 +1438,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	// 发送到每个webhook
 	for _, wh := range webhooks {
 		log.Printf("[runSingleTaskPush] Sending to webhook ID=%d, URL=%s", wh.ID, wh.URL)
-		log.Printf("[runSingleTaskPush] AllDataPoints summary:")
-		for i, data := range allDataPoints {
-			log.Printf("[runSingleTaskPush] Chart %d: Title='%s', Type='%s', %d data points",
-				i+1, data.ChartTitle, data.ChartType, len(data.DataPoints))
-
-			// 记录前5个数据点的信息做示例
-			for j, dp := range data.DataPoints {
-				if j < 5 {
-					log.Printf("[runSingleTaskPush] - Point %d: Time='%s', Type='%s', Value=%f",
-						j+1, dp.Time, dp.Type, dp.Value)
-				}
-			}
-
-			// 统计不同Type的数量
-			typeCount := make(map[string]int)
-			for _, dp := range data.DataPoints {
-				typeCount[dp.Type]++
-			}
-			log.Printf("[runSingleTaskPush] - Type distribution: %v", typeCount)
-		}
-
-		// 使用标准图表发送数据
-		err := service.SendFeishuStandardChart(wh.URL, allDataPoints, cardTitle, cardTemplate, unit, buttonText, buttonURL, showDataLabel.Int64 == 1) // 使用 Int64 值进行比较
+		err := service.SendFeishuStandardChart(wh.URL, allDataPoints, cardTitle, cardTemplate, unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
 		if err != nil {
 			log.Printf("[runSingleTaskPush] Error sending to webhook: %v", err)
 			insertPushStatus(db, sourceID, wh.ID, err)
@@ -1494,14 +1446,6 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 			log.Printf("[runSingleTaskPush] Successfully sent to webhook ID=%d", wh.ID)
 			insertPushStatus(db, sourceID, wh.ID, nil)
 		}
-	}
-
-	// 更新任务的last_run_at
-	_, err = db.Exec("UPDATE push_task SET last_run_at = datetime('now') WHERE id = ?", taskID)
-	if err != nil {
-		log.Printf("[runSingleTaskPush] Error updating last_run_at: %v", err)
-	} else {
-		log.Printf("[runSingleTaskPush] Updated last_run_at for task ID=%d", taskID)
 	}
 }
 
@@ -2009,14 +1953,13 @@ func processPushTasks(db *sql.DB) {
 	}
 	defer rows.Close()
 
-	var tasks []struct {
-		ID        int64
-		Name      string
-		LastRunAt string
-		SendTimes string
-	}
+	// 当前时间信息
+	currentWeekday := int(now.Weekday())
+	currentTime := now.Format("15:04")
 
-	log.Printf("[scheduler] ========== Enabled Tasks Summary ==========")
+	log.Printf("[scheduler] Current time: %s, weekday: %d", currentTime, currentWeekday)
+
+	// 遍历所有启用的任务
 	for rows.Next() {
 		var task struct {
 			ID        int64
@@ -2030,171 +1973,53 @@ func processPushTasks(db *sql.DB) {
 			continue
 		}
 
-		// 输出每个已启用任务的详细信息
-		log.Printf("[scheduler] Task ID=%d:", task.ID)
-		log.Printf("[scheduler]   - Name: %s", task.Name)
+		log.Printf("[scheduler] Processing task ID=%d (%s)", task.ID, task.Name)
 		log.Printf("[scheduler]   - Last Run: %s", task.LastRunAt)
 		log.Printf("[scheduler]   - Send Times: %s", task.SendTimes)
-
-		// 计算下次执行时间
-		var nextExecTime time.Time
-		if task.SendTimes != "" {
-			sendTimesList := strings.Split(task.SendTimes, ",")
-			for _, st := range sendTimesList {
-				parts := strings.Split(strings.TrimSpace(st), " ")
-				if len(parts) == 2 {
-					weekday, _ := strconv.Atoi(parts[0])
-					sendTime := parts[1]
-
-					// 解析发送时间
-					sendTimeToday, err := time.Parse("15:04", sendTime)
-					if err != nil {
-						continue
-					}
-
-					// 计算下次执行时间
-					currentWeekday := int(now.Weekday())
-					daysUntilNextSend := (weekday - currentWeekday + 7) % 7
-					if daysUntilNextSend == 0 && now.Format("15:04") > sendTime {
-						daysUntilNextSend = 7
-					}
-
-					nextSend := time.Date(
-						now.Year(), now.Month(), now.Day(),
-						sendTimeToday.Hour(), sendTimeToday.Minute(), 0, 0, now.Location(),
-					).AddDate(0, 0, daysUntilNextSend)
-
-					if nextExecTime.IsZero() || nextSend.Before(nextExecTime) {
-						nextExecTime = nextSend
-					}
-				}
-			}
-		}
-
-		if !nextExecTime.IsZero() {
-			log.Printf("[scheduler]   - Next Execution: %s", nextExecTime.Format("2006-01-02 15:04"))
-		} else {
-			log.Printf("[scheduler]   - Next Execution: Not scheduled")
-		}
-
-		tasks = append(tasks, struct {
-			ID        int64
-			Name      string
-			LastRunAt string
-			SendTimes string
-		}{
-			ID:        task.ID,
-			Name:      task.Name,
-			LastRunAt: task.LastRunAt,
-			SendTimes: task.SendTimes,
-		})
-	}
-	log.Printf("[scheduler] ========== End Tasks Summary ==========")
-	log.Printf("[scheduler] Found %d enabled tasks", len(tasks))
-
-	// 处理每个启用的任务
-	for _, task := range tasks {
-		log.Printf("[scheduler] Processing task ID=%d (%s)", task.ID, task.Name)
-
-		// 获取任务的发送时间配置
-		sendTimeRows, err := db.Query(`
-            SELECT weekday, send_time
-            FROM push_task_send_time
-            WHERE task_id = ?
-        `, task.ID)
-		if err != nil {
-			log.Printf("[scheduler] Error querying send times for task %d: %v", task.ID, err)
-			continue
-		}
-
-		var sendTimes []struct {
-			Weekday  int
-			SendTime string
-		}
-		for sendTimeRows.Next() {
-			var st struct {
-				Weekday  int
-				SendTime string
-			}
-			if err := sendTimeRows.Scan(&st.Weekday, &st.SendTime); err != nil {
-				log.Printf("[scheduler] Error scanning send time: %v", err)
-				continue
-			}
-			sendTimes = append(sendTimes, st)
-		}
-		sendTimeRows.Close()
-
-		if len(sendTimes) == 0 {
-			log.Printf("[scheduler] Task ID=%d (%s) has no send times configured, skipping", task.ID, task.Name)
-			continue
-		}
-
-		// 获取当前时间
-		now := time.Now()
-		currentWeekday := int(now.Weekday())
-		currentTime := now.Format("15:04")
-
-		// 检查是否应该在当前时间发送
-		shouldSendNow := false
-		var nextSendTime time.Time
-		for _, st := range sendTimes {
-			// 解析发送时间
-			sendTimeToday, err := time.Parse("15:04", st.SendTime)
-			if err != nil {
-				log.Printf("[scheduler] Error parsing send time %s for task %d: %v", st.SendTime, task.ID, err)
-				continue
-			}
-			sendTimeToday = time.Date(now.Year(), now.Month(), now.Day(),
-				sendTimeToday.Hour(), sendTimeToday.Minute(), 0, 0, now.Location())
-
-			// 如果是当天的发送时间
-			if st.Weekday == currentWeekday {
-				if currentTime == st.SendTime {
-					shouldSendNow = true
-					log.Printf("[scheduler] Task ID=%d (%s) scheduled for current time (%s)",
-						task.ID, task.Name, st.SendTime)
-				}
-			}
-
-			// 计算下次发送时间
-			daysUntilNextSend := (st.Weekday - currentWeekday + 7) % 7
-			if daysUntilNextSend == 0 && currentTime > st.SendTime {
-				daysUntilNextSend = 7
-			}
-			possibleNextSend := sendTimeToday.AddDate(0, 0, daysUntilNextSend)
-
-			if nextSendTime.IsZero() || possibleNextSend.Before(nextSendTime) {
-				nextSendTime = possibleNextSend
-			}
-		}
-
-		// 记录下次发送时间
-		log.Printf("[scheduler] Task ID=%d (%s) next scheduled execution: %s",
-			task.ID, task.Name, nextSendTime.Format("2006-01-02 15:04"))
-
-		if !shouldSendNow {
-			log.Printf("[scheduler] Task ID=%d (%s) not scheduled for current time, skipping",
-				task.ID, task.Name)
-			continue
-		}
 
 		// 检查上次运行时间，避免重复执行
 		if task.LastRunAt != "" {
 			lastRun, err := time.Parse("2006-01-02 15:04:05", task.LastRunAt)
-			if err == nil {
-				// 如果距离上次运行时间小于5分钟，跳过本次执行
-				if now.Sub(lastRun) < 5*time.Minute {
-					log.Printf("[scheduler] Task ID=%d (%s) was recently executed at %s (less than 5 minutes ago), skipping",
-						task.ID, task.Name, task.LastRunAt)
+			if err == nil && now.Sub(lastRun) < 5*time.Minute {
+				log.Printf("[scheduler] Task ID=%d was recently executed (less than 5 minutes ago), skipping", task.ID)
+				continue
+			}
+		}
+
+		// 检查是否应该在当前时间执行
+		shouldExecute := false
+		if task.SendTimes != "" {
+			for _, timeStr := range strings.Split(task.SendTimes, ",") {
+				if timeStr == "" {
 					continue
+				}
+				parts := strings.Split(strings.TrimSpace(timeStr), " ")
+				if len(parts) != 2 {
+					continue
+				}
+
+				weekday, err := strconv.Atoi(parts[0])
+				if err != nil {
+					continue
+				}
+
+				sendTime := parts[1]
+				// 如果是当前星期几且时间匹配，则执行
+				if weekday == currentWeekday && sendTime == currentTime {
+					shouldExecute = true
+					log.Printf("[scheduler] Task ID=%d scheduled for current time (weekday=%d, time=%s)",
+						task.ID, weekday, sendTime)
+					break
 				}
 			}
 		}
 
-		log.Printf("[scheduler] Task ID=%d (%s) execution criteria met, triggering execution",
-			task.ID, task.Name)
+		if !shouldExecute {
+			continue
+		}
 
-		// 异步执行任务
+		log.Printf("[scheduler] Executing task ID=%d (%s)", task.ID, task.Name)
+		// 使用与立即执行相同的逻辑
 		go runSingleTaskPush(db, task.ID)
 	}
 

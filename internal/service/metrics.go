@@ -522,9 +522,9 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			return result.Values[i][0].(float64) > result.Values[j][0].(float64)
 		})
 
-		// 打印原始结果的完整数据，帮助调试
-		rawJSON, _ := json.MarshalIndent(result, "", "  ")
-		log.Printf("[FetchMetrics] Raw result data (sorted newest to oldest):\n%s", string(rawJSON))
+		// // 打印原始结果的完整数据，帮助调试
+		// rawJSON, _ := json.MarshalIndent(result, "", "  ")
+		// log.Printf("[FetchMetrics] Raw result data (sorted newest to oldest):\n%s", string(rawJSON))
 
 		// 检查该结果的时间范围并记录
 		if len(result.Values) > 0 {
