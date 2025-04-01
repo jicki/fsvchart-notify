@@ -3,7 +3,7 @@
 # ===================
 
 # 1. Node 构建阶段 (编译前端)
-FROM reg.deeproute.ai/deeproute-public/node:18-alpine AS frontend-builder
+FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/ ./
 RUN npm install
@@ -11,7 +11,7 @@ RUN npm run build
 # 上一步会生成 dist 目录，在 /app/frontend/dist 下
 
 # 2. Go 构建阶段
-FROM reg.deeproute.ai/deeproute-public/golang:1.23-alpine AS go-builder
+FROM golang:1.23-alpine AS go-builder
 WORKDIR /app
 
 # 添加版本参数
