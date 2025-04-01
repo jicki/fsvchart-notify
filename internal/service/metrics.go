@@ -643,7 +643,7 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		if _, exists := validTimeStamps[labelValue]; !exists {
 			validTimeStamps[labelValue] = make(map[int64]bool)
 			labelValues = append(labelValues, labelValue)
-			log.Printf("[FetchMetrics] Added new label value: %s", labelValue)
+			// log.Printf("[FetchMetrics] Added new label value: %s", labelValue)
 		}
 
 		if _, exists := actualPoints[labelValue]; !exists {
@@ -654,13 +654,14 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		for _, point := range result.Values {
 			ts := int64(point[0].(float64))
 			// 将时间戳转换为中国时区
-			timePoint := time.Unix(ts, 0).In(ChinaTimezone)
+			// timePoint := time.Unix(ts, 0).In(ChinaTimezone)
 			val := point[1].(string)
 			var floatVal float64
 			var err error
 
-			log.Printf("[FetchMetrics] Processing value: %s (type=%T) at time %v",
-				val, val, timePoint.Format("2006-01-02 15:04:05"))
+			// ## 打印原始值和转换后的值
+			// log.Printf("[FetchMetrics] Processing value: %s (type=%T) at time %v",
+			// 	val, val, timePoint.Format("2006-01-02 15:04:05"))
 
 			// 处理各种数值格式
 			val = strings.TrimSpace(val)
@@ -706,26 +707,28 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			}
 
 			floatVal = math.Round(floatVal*100) / 100
-			log.Printf("[FetchMetrics] Value conversion: original='%s', parsed=%f, final=%f",
-				point[1].(string), floatVal, floatVal)
+			// ## 打印原始值和转换后的值
+			// log.Printf("[FetchMetrics] Value conversion: original='%s', parsed=%f, final=%f",
+			// 	point[1].(string), floatVal, floatVal)
 			actualPoints[labelValue][ts] = floatVal
 			validTimeStamps[labelValue][ts] = true
 		}
-		log.Printf("[FetchMetrics] Processed %d points for label %s", len(result.Values), labelValue)
+		// log.Printf("[FetchMetrics] Processed %d points for label %s", len(result.Values), labelValue)
 
 		// 打印该标签的所有时间点和值
-		log.Printf("[FetchMetrics] Time points for label %s:", labelValue)
+		// log.Printf("[FetchMetrics] Time points for label %s:", labelValue)
 		var timeKeys []int64
 		for ts := range actualPoints[labelValue] {
 			timeKeys = append(timeKeys, ts)
 		}
 		sort.Slice(timeKeys, func(i, j int) bool { return timeKeys[i] < timeKeys[j] })
-		for _, ts := range timeKeys {
-			log.Printf("[FetchMetrics] %v (%s) = %f",
-				ts,
-				time.Unix(ts, 0).Format("2006-01-02 15:04:05"),
-				actualPoints[labelValue][ts])
-		}
+		// 打印该标签的所有时间点和值
+		// for _, ts := range timeKeys {
+		// 	log.Printf("[FetchMetrics] %v (%s) = %f",
+		// 		ts,
+		// 		time.Unix(ts, 0).Format("2006-01-02 15:04:05"),
+		// 		actualPoints[labelValue][ts])
+		// }
 
 		// 如果数据点太少，进行插值填充
 		if len(timeKeys) < 5 && len(timeKeys) > 0 {
@@ -894,15 +897,15 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		return allPoints[i].UnixTime > allPoints[j].UnixTime
 	})
 
-	// 打印最终的排序结果
-	log.Printf("[FetchMetrics] Final sorted points (newest to oldest):")
-	for i, p := range allPoints {
-		log.Printf("[FetchMetrics] [%d] Time=%s (%d) Type=%s Value=%f",
-			i, p.Time, p.UnixTime, p.Type, p.Value)
-	}
+	// // 打印最终的排序结果
+	// log.Printf("[FetchMetrics] Final sorted points (newest to oldest):")
+	// for i, p := range allPoints {
+	// 	log.Printf("[FetchMetrics] [%d] Time=%s (%d) Type=%s Value=%f",
+	// 		i, p.Time, p.UnixTime, p.Type, p.Value)
+	// }
 
-	log.Printf("[FetchMetrics] ====== END ======")
-	log.Printf("[FetchMetrics] Total points generated: %d", len(allPoints))
+	// log.Printf("[FetchMetrics] ====== END ======")
+	// log.Printf("[FetchMetrics] Total points generated: %d", len(allPoints))
 
 	return allPoints, nil
 }

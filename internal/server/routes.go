@@ -894,20 +894,31 @@ func updatePushTask(c *gin.Context) {
 	rowsAffected, _ = result.RowsAffected()
 	log.Printf("[updatePushTask] 删除旧的发送时间成功，删除数量: %d", rowsAffected)
 
-	// 2. 插入新的发送时间
-	for _, sendTime := range req.SendTimes {
-		_, err = tx.Exec(`
-			INSERT INTO push_task_send_time (
-				task_id, weekday, send_time
-			) VALUES (?, ?, ?)
-		`, id, sendTime.Weekday, sendTime.SendTime)
-		if err != nil {
-			log.Printf("[updatePushTask] 插入新的发送时间失败: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert send time: " + err.Error()})
-			return
+	// 2. 只有在有新的发送时间时才插入
+	if len(req.SendTimes) > 0 {
+		for _, sendTime := range req.SendTimes {
+			// 验证发送时间的格式
+			if sendTime.SendTime == "" || sendTime.Weekday < 0 || sendTime.Weekday > 7 {
+				log.Printf("[updatePushTask] 无效的发送时间配置: weekday=%d, time=%s",
+					sendTime.Weekday, sendTime.SendTime)
+				continue
+			}
+
+			_, err = tx.Exec(`
+				INSERT INTO push_task_send_time (
+					task_id, weekday, send_time
+				) VALUES (?, ?, ?)
+			`, id, sendTime.Weekday, sendTime.SendTime)
+			if err != nil {
+				log.Printf("[updatePushTask] 插入新的发送时间失败: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert send time: " + err.Error()})
+				return
+			}
 		}
+		log.Printf("[updatePushTask] 插入新的发送时间成功，插入数量: %d", len(req.SendTimes))
+	} else {
+		log.Printf("[updatePushTask] 没有新的发送时间需要插入")
 	}
-	log.Printf("[updatePushTask] 插入新的发送时间成功，插入数量: %d", len(req.SendTimes))
 
 	// 更新关联的 PromQL
 	if len(req.PromQLIDs) > 0 {

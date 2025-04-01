@@ -282,7 +282,7 @@
                     <option value="7">周日</option>
                 </select>
                 <input type="time" v-model="time.send_time" class="form-control" required />
-                <button @click="removeSendTime(index)" v-if="newTaskSendTimes.length > 1" class="remove-time-btn">
+                <button type="button" @click="() => removeSendTime(index, false)" class="remove-time-btn">
                     删除
                 </button>
             </div>
@@ -480,7 +480,7 @@
                     <option value="7">周日</option>
                 </select>
                 <input type="time" v-model="time.send_time" class="form-control" required />
-                <button @click="removeSendTime(index)" v-if="editTaskSendTimes.length > 1" class="remove-time-btn">
+                <button type="button" @click="() => removeSendTime(index, true)" class="remove-time-btn">
                     删除
                 </button>
             </div>
@@ -708,9 +708,9 @@ function addSendTime(isEdit = false) {
 }
 
 // 删除发送时间
-function removeSendTime(index, isEdit = false) {
+function removeSendTime(index: number, isEdit = false) {
     const targetArray = isEdit ? editTaskSendTimes : newTaskSendTimes;
-    targetArray.value.splice(index, 1)
+    targetArray.value = targetArray.value.filter((_, i) => i !== index);
 }
 
 // 获取星期几的文字描述

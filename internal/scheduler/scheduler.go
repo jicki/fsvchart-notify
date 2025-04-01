@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -341,40 +342,133 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 		return
 	}
 
-	// 发送到每个webhook
-	for _, wh := range webhooks {
-		// 获取图表类型
+	// 修改发送逻辑：先循环查询获取数据，再发送到所有webhook
+	// 这样可以避免因飞书API频率限制导致的重复查询和发送
+	type QueryResult struct {
+		DataPoints []models.DataPoint
+		ChartType  string
+		ChartTitle string
+		QueryName  string
+	}
+
+	// 存储每个查询的结果
+	var queryResults []QueryResult
+
+	// 用于去重的map
+	seenQueries := make(map[string]bool)
+
+	// 先获取所有查询的数据点
+	for _, query := range queries {
+		// 使用查询名称作为唯一标识
+		queryKey := query.PromQLName
+		if queryKey == "" {
+			queryKey = query.Query
+		}
+
+		// 跳过重复的查询
+		if seenQueries[queryKey] {
+			log.Printf("[runSingleTaskPush] 跳过重复的查询: %s", queryKey)
+			continue
+		}
+		seenQueries[queryKey] = true
+
 		var chartType string
-		for _, query := range queries {
-			err = db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)
-			if err != nil {
-				log.Printf("[runSingleTaskPush] Error querying chart template (ID=%d): %v", query.ChartTemplateID, err)
-				chartType = "area" // 默认为area类型
+		err = db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)
+		if err != nil {
+			log.Printf("[runSingleTaskPush] Error querying chart template (ID=%d): %v", query.ChartTemplateID, err)
+			chartType = "area" // 默认为area类型
+		}
+
+		// 获取数据点
+		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, metricLabel, "")
+		if err != nil {
+			log.Printf("[runSingleTaskPush] Error fetching metrics for query '%s': %v", query.PromQLName, err)
+			// 记录错误但继续处理其他查询
+			continue
+		}
+
+		// 保存查询结果
+		queryResults = append(queryResults, QueryResult{
+			DataPoints: dataPoints,
+			ChartType:  chartType,
+			ChartTitle: cardTitle,
+			QueryName:  queryKey,
+		})
+
+		log.Printf("[runSingleTaskPush] Successfully fetched metrics for query '%s': %d data points",
+			queryKey, len(dataPoints))
+	}
+
+	// 检查是否有有效的查询结果
+	if len(queryResults) == 0 {
+		log.Printf("[runSingleTaskPush] No valid query results for task ID=%d", taskID)
+		for _, wh := range webhooks {
+			insertPushStatus(db, sourceID, wh.ID, fmt.Errorf("no valid data from any query"))
+		}
+		return
+	}
+
+	// 然后将所有查询结果发送到每个webhook
+	for _, wh := range webhooks {
+		// 为每个webhook只发送一次，包含所有查询结果
+		var allQueryDataPoints []models.QueryDataPoints
+
+		// 使用map进行系列去重
+		seenSeries := make(map[string]bool)
+
+		// 收集所有查询的数据点
+		for _, result := range queryResults {
+			// 使用查询名称作为唯一标识
+			seriesKey := result.QueryName
+			if seriesKey == "" {
+				// 如果没有查询名称，使用ChartTitle
+				seriesKey = result.ChartTitle
 			}
 
-			// 获取数据点
-			dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, metricLabel, "")
-			if err != nil {
-				log.Printf("[runSingleTaskPush] Error fetching metrics: %v", err)
-				insertPushStatus(db, sourceID, wh.ID, err)
+			// 跳过重复的系列
+			if seenSeries[seriesKey] {
+				log.Printf("[runSingleTaskPush] 跳过重复的系列: %s", seriesKey)
 				continue
 			}
+			seenSeries[seriesKey] = true
 
-			// 发送飞书消息
-			err = service.SendFeishuStandardChart(wh.URL, []models.QueryDataPoints{{
-				DataPoints: dataPoints,
-				ChartType:  chartType,
-				ChartTitle: cardTitle,
-			}}, cardTitle, cardTemplate, unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
-
-			if err != nil {
-				log.Printf("[runSingleTaskPush] Error sending to webhook: %v", err)
-				insertPushStatus(db, sourceID, wh.ID, err)
-			} else {
-				log.Printf("[runSingleTaskPush] Successfully sent to webhook ID=%d", wh.ID)
-				insertPushStatus(db, sourceID, wh.ID, nil)
-			}
+			// 添加到发送队列
+			allQueryDataPoints = append(allQueryDataPoints, models.QueryDataPoints{
+				DataPoints: result.DataPoints,
+				ChartType:  result.ChartType,
+				ChartTitle: seriesKey,
+			})
 		}
+
+		// 记录实际发送的系列数量
+		log.Printf("[runSingleTaskPush] 向webhook ID=%d 发送 %d 个唯一系列", wh.ID, len(allQueryDataPoints))
+
+		// 发送飞书消息，一次性发送所有查询结果
+		err = service.SendFeishuStandardChart(wh.URL, allQueryDataPoints, cardTitle, cardTemplate,
+			unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
+
+		if err != nil {
+			log.Printf("[runSingleTaskPush] Error sending to webhook ID=%d: %v", wh.ID, err)
+			insertPushStatus(db, sourceID, wh.ID, err)
+
+			// 如果是频率限制错误，增加等待时间
+			if strings.Contains(err.Error(), "frequency limited") || strings.Contains(err.Error(), "too many request") {
+				waitTime := 3 * time.Second
+				log.Printf("[runSingleTaskPush] 检测到频率限制错误，等待 %v 后继续", waitTime)
+				time.Sleep(waitTime)
+				continue // 遇到频率限制错误时，跳过当前发送，继续下一个
+			}
+		} else {
+			log.Printf("[runSingleTaskPush] Successfully sent %d unique series to webhook ID=%d",
+				len(allQueryDataPoints), wh.ID)
+			insertPushStatus(db, sourceID, wh.ID, nil)
+
+			// 成功发送后也增加短暂间隔，避免频率限制
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		// 每个webhook只发送一次，发送完就退出循环
+		break
 	}
 
 	// 更新任务的last_run_at

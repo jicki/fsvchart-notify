@@ -640,8 +640,8 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 				// 检查是否有时间点重复但时间戳日期相同的情况
 				sameTimestampDates := uniqueDatesCount <= 1 && (hasTimeRepetition || len(queryData.DataPoints) > len(timeCounts))
 
-				log.Printf("[SendFeishuStandardChart] 处理数据点: Type=%s, Time=%s, UnixTime=%d, 实际日期=%s",
-					dp.Type, dp.Time, dp.UnixTime, realDate)
+				// log.Printf("[SendFeishuStandardChart] 处理数据点: Type=%s, Time=%s, UnixTime=%d, 实际日期=%s",
+				// 	dp.Type, dp.Time, dp.UnixTime, realDate)
 
 				// 生成不同的虚拟日期以区分数据点
 				// 这种情况是数据有同一天的时间戳但逻辑上是多天的数据
@@ -917,7 +917,7 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 
 			// 记录排序后的日期顺序，以便验证数据完整性
 			if len(points) > 0 {
-				log.Printf("[SendFeishuStandardChart] 系列 '%s' 的时间点日期顺序:", seriesType)
+				// log.Printf("[SendFeishuStandardChart] 系列 '%s' 的时间点日期顺序:", seriesType)
 				dateOrder := []string{}
 				for _, p := range points {
 					dateStr := time.Unix(p.UnixTime, 0).Format("2006-01-02")
@@ -939,10 +939,10 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 			var chartPoints []map[string]interface{}
 
 			// 输出每个数据点的详细信息用于调试
-			log.Printf("[SendFeishuStandardChart] 处理系列 '%s' 的数据点:", seriesType)
+			// log.Printf("[SendFeishuStandardChart] 处理系列 '%s' 的数据点:", seriesType)
 			for j, p := range points {
-				log.Printf("[SendFeishuStandardChart]   - 点 %d: Time='%s', UnixTime=%d, Value=%f",
-					j+1, p.Time, p.UnixTime, p.Value)
+				// log.Printf("[SendFeishuStandardChart]   - 点 %d: Time='%s', UnixTime=%d, Value=%f",
+				// 	j+1, p.Time, p.UnixTime, p.Value)
 
 				// 确保每个数据点被正确添加到chartPoints
 				chartPoints = append(chartPoints, map[string]interface{}{
@@ -956,8 +956,8 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 				})
 			}
 
-			log.Printf("[SendFeishuStandardChart] 系列 '%s' 最终生成了 %d 个图表数据点",
-				seriesType, len(chartPoints))
+			// log.Printf("[SendFeishuStandardChart] 系列 '%s' 最终生成了 %d 个图表数据点",
+			// 	seriesType, len(chartPoints))
 
 			chartData = append(chartData, map[string]interface{}{
 				"values": chartPoints,
@@ -1236,20 +1236,59 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 		return fmt.Errorf("JSON编码错误: %w", err)
 	}
 
+	// 在发送前对系列数据进行去重
+	if elements, ok := cardData["card"].(map[string]interface{})["elements"].([]interface{}); ok {
+		for _, element := range elements {
+			if elem, ok := element.(map[string]interface{}); ok {
+				if elem["tag"] == "chart" {
+					if chartSpec, ok := elem["chart_spec"].(map[string]interface{}); ok {
+						if data, ok := chartSpec["data"].([]map[string]interface{}); ok {
+							// 使用map进行去重
+							seenSeries := make(map[string]bool)
+							var uniqueData []map[string]interface{}
+
+							for _, series := range data {
+								if values, ok := series["values"].([]map[string]interface{}); ok && len(values) > 0 {
+									// 使用第一个数据点的name作为系列标识
+									if name, ok := values[0]["name"].(string); ok {
+										if !seenSeries[name] {
+											seenSeries[name] = true
+											uniqueData = append(uniqueData, series)
+										} else {
+											log.Printf("[SendFeishuStandardChart] 跳过重复的系列: %s", name)
+										}
+									}
+								}
+							}
+							chartSpec["data"] = uniqueData
+						}
+					}
+				}
+			}
+		}
+	}
+
 	log.Printf("[SendFeishuStandardChart] 发送图表卡片 (长度: %d 字节) 到 webhook: %s", len(jsonData), webhookURL)
 
 	// 重试逻辑
 	var lastErr error
-	for retry := 0; retry < 3; retry++ {
-		if retry > 0 {
-			log.Printf("[SendFeishuStandardChart] 重试 #%d...", retry)
-			time.Sleep(time.Duration(retry) * 2 * time.Second)
+	retryCount := 0
+	maxRetries := 3
+	baseWaitTime := 5 * time.Second
+
+	for retryCount < maxRetries {
+		if retryCount > 0 {
+			// 使用指数退避策略，每次重试等待时间翻倍
+			waitTime := baseWaitTime * time.Duration(1<<uint(retryCount-1))
+			log.Printf("[SendFeishuStandardChart] 第%d次重试，等待 %v 后继续...", retryCount, waitTime)
+			time.Sleep(waitTime)
 		}
 
 		// 创建请求
 		req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(jsonData))
 		if err != nil {
 			lastErr = fmt.Errorf("创建请求错误: %w", err)
+			retryCount++
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -1259,6 +1298,7 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("HTTP请求失败: %w", err)
+			retryCount++
 			continue
 		}
 
@@ -1267,12 +1307,6 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 		resp.Body.Close()
 		log.Printf("[SendFeishuStandardChart] 响应状态: %d, 内容: %s", resp.StatusCode, string(body))
 
-		// 检查响应状态
-		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("飞书返回非200状态码: %d, 内容: %s", resp.StatusCode, string(body))
-			continue
-		}
-
 		// 解析响应JSON
 		var result struct {
 			Code int    `json:"code"`
@@ -1280,17 +1314,26 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 		}
 
 		if err := json.Unmarshal(body, &result); err != nil {
-			lastErr = fmt.Errorf("解析响应JSON失败: %w", err)
+			lastErr = fmt.Errorf("解析响应JSON失败: %w, 响应内容: %s", err, string(body))
+			retryCount++
 			continue
 		}
 
 		// 检查飞书API返回的状态码
 		if result.Code != 0 {
+			// 特殊处理频率限制错误
+			if result.Code == 9499 || result.Code == 11232 || strings.Contains(result.Msg, "frequency limited") || strings.Contains(result.Msg, "too many request") {
+				lastErr = fmt.Errorf("飞书API频率限制: code=%d, msg=%s", result.Code, result.Msg)
+				retryCount++
+				continue
+			}
+
 			lastErr = fmt.Errorf("飞书API错误: code=%d, msg=%s", result.Code, result.Msg)
+			retryCount++
 			continue
 		}
 
-		// 成功
+		// 成功发送
 		log.Printf("[SendFeishuStandardChart] 发送成功！")
 
 		// 记录发送记录，添加按钮文本和按钮链接信息
@@ -1309,7 +1352,7 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 
 	log.Printf("[SendFeishuStandardChart] 所有重试都失败，最后错误: %v", lastErr)
 
-	// 记录失败的发送记录，同样包含按钮文本和按钮链接信息
+	// 记录失败的发送记录
 	AddSendRecord(models.SendRecord{
 		Timestamp:  time.Now(),
 		Status:     "error",
