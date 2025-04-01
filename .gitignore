@@ -1,0 +1,4 @@
+data/
+bin/*
+frontend/node_modules/
+web/*.md
