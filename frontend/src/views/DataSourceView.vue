@@ -50,8 +50,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { get, post, put, del } from '../utils/api'
 
-const emit = defineEmits(['source-updated'])
-
 const metricsSources = ref<any[]>([])
 const newSourceName = ref('')
 const newSourceURL = ref('')
@@ -91,7 +89,6 @@ async function addMetricsSource() {
     
     // 刷新列表并通知更新
     await fetchMetricsSources()
-    emit('source-updated')
   } catch (err) {
     console.error('添加数据源失败:', err)
     alert('添加数据源失败，请重试')
@@ -128,7 +125,6 @@ async function saveEditSource(id:number){
     
     // 刷新列表并通知更新
     await fetchMetricsSources()
-    emit('source-updated')
   } catch (err) {
     console.error('更新数据源失败:', err)
     alert('更新数据源失败，请重试')
@@ -144,7 +140,6 @@ async function deleteMetricsSource(id:number){
     
     // 刷新列表并通知更新
     await fetchMetricsSources()
-    emit('source-updated')
   } catch (err) {
     console.error('删除数据源失败:', err)
     alert('删除数据源失败，请重试')
@@ -172,6 +167,48 @@ onUnmounted(() => {
 })
 </script>
 
-<!-- 如果你需要子组件私有样式,可在此 <style scoped>, 不会影响父组件公共样式. -->
 <style scoped>
+.tab-content {
+  padding: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f5f5f5;
+}
+
+button {
+  margin: 0 5px;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #f5f5f5;
+}
+
+input {
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+label {
+  margin-right: 15px;
+}
 </style>

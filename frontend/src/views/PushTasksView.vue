@@ -127,18 +127,34 @@
         <label>选择预定义 PromQL 查询 (必选):</label>
         <div class="promql-selection">
           <div v-if="promqls.length > 0">
+            <!-- 添加全局展开/收起按钮 -->
+            <div class="promql-actions">
+              <button class="action-btn" @click="toggleAllPromQLs">
+                {{ isAllPromQLExpanded ? '收起所有查询' : '展开所有查询' }}
+              </button>
+            </div>
             <div v-for="promql in promqls" :key="promql.id" class="promql-item">
-        <input 
-                type="checkbox" 
-                :id="`promql-${promql.id}`" 
-                :value="promql.id.toString()" 
-                v-model="selectedPromQLs"
-              >
-              <label :for="`promql-${promql.id}`">
-                {{ promql.name }} 
-                <span class="promql-category" v-if="promql.category">({{ promql.category }})</span>
-                <span class="promql-query">{{ promql.query }}</span>
-              </label>
+              <div class="promql-header">
+                <input 
+                  type="checkbox" 
+                  :id="`promql-${promql.id}`" 
+                  :value="promql.id.toString()" 
+                  v-model="selectedPromQLs"
+                >
+                <label :for="`promql-${promql.id}`" class="promql-label">
+                  {{ promql.name }}
+                  <span class="promql-category" v-if="promql.category">({{ promql.category }})</span>
+                </label>
+                <button class="expand-btn" @click="togglePromQLExpand(promql.id)">
+                  {{ expandedPromQLs.includes(promql.id) ? '收起' : '展开' }}
+                </button>
+              </div>
+              <div class="promql-details" :class="{ 'expanded': expandedPromQLs.includes(promql.id) }">
+                <pre class="promql-query" v-html="highlightPromQL(promql.query)"></pre>
+                <div class="promql-description" v-if="promql.description">
+                  {{ promql.description }}
+                </div>
+              </div>
             </div>
           </div>
           <div v-else>
@@ -309,18 +325,34 @@
         <label>选择预定义 PromQL 查询 (必选):</label>
         <div class="promql-selection">
           <div v-if="promqls.length > 0">
+            <!-- 添加全局展开/收起按钮 -->
+            <div class="promql-actions">
+              <button class="action-btn" @click="toggleAllPromQLs">
+                {{ isAllPromQLExpanded ? '收起所有查询' : '展开所有查询' }}
+              </button>
+            </div>
             <div v-for="promql in promqls" :key="promql.id" class="promql-item">
-            <input 
-                type="checkbox" 
-                :id="`edit-promql-${promql.id}`" 
-                :value="promql.id.toString()" 
-                v-model="editSelectedPromQLs"
-              >
-              <label :for="`edit-promql-${promql.id}`">
-                {{ promql.name }} 
-                <span class="promql-category" v-if="promql.category">({{ promql.category }})</span>
-                <span class="promql-query">{{ promql.query }}</span>
-              </label>
+              <div class="promql-header">
+                <input 
+                  type="checkbox" 
+                  :id="`edit-promql-${promql.id}`" 
+                  :value="promql.id.toString()" 
+                  v-model="editSelectedPromQLs"
+                >
+                <label :for="`edit-promql-${promql.id}`" class="promql-label">
+                  {{ promql.name }}
+                  <span class="promql-category" v-if="promql.category">({{ promql.category }})</span>
+                </label>
+                <button class="expand-btn" @click="togglePromQLExpand(promql.id)">
+                  {{ expandedPromQLs.includes(promql.id) ? '收起' : '展开' }}
+                </button>
+              </div>
+              <div class="promql-details" :class="{ 'expanded': expandedPromQLs.includes(promql.id) }">
+                <pre class="promql-query" v-html="highlightPromQL(promql.query)"></pre>
+                <div class="promql-description" v-if="promql.description">
+                  {{ promql.description }}
+                </div>
+              </div>
             </div>
           </div>
           <div v-else>
@@ -2002,6 +2034,80 @@ async function copyTask(task) {
     alert(errorMsg)
   }
 }
+
+// 添加 PromQL 展开状态管理
+const expandedPromQLs = ref<number[]>([])
+const isAllPromQLExpanded = ref(false)
+
+// 展开/收起所有 PromQL 查询
+function toggleAllPromQLs() {
+  if (isAllPromQLExpanded.value) {
+    expandedPromQLs.value = []
+  } else {
+    expandedPromQLs.value = promqls.value.map(p => p.id)
+  }
+  isAllPromQLExpanded.value = !isAllPromQLExpanded.value
+}
+
+// 展开/收起单个 PromQL 查询
+function togglePromQLExpand(id: number) {
+  const index = expandedPromQLs.value.indexOf(id)
+  if (index === -1) {
+    expandedPromQLs.value.push(id)
+  } else {
+    expandedPromQLs.value.splice(index, 1)
+  }
+  // 更新全局展开状态
+  isAllPromQLExpanded.value = expandedPromQLs.value.length === promqls.value.length
+}
+
+// PromQL 语法高亮函数
+function highlightPromQL(query: string): string {
+  if (!query) return ''
+  
+  // 基本的 PromQL 关键字和函数
+  const keywords = [
+    'sum', 'rate', 'irate', 'avg', 'max', 'min', 'count',
+    'by', 'without', 'offset', 'bool', 'and', 'or', 'unless',
+    'group', 'ignoring', 'on', 'topk', 'bottomk'
+  ]
+  
+  // 转义 HTML 特殊字符
+  let highlighted = query.replace(/[&<>]/g, char => {
+    const entities: { [key: string]: string } = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;'
+    }
+    return entities[char] || char
+  })
+  
+  // 高亮关键字
+  keywords.forEach(keyword => {
+    const regex = new RegExp(`\\b${keyword}\\b`, 'g')
+    highlighted = highlighted.replace(regex, `<span class="keyword">${keyword}</span>`)
+  })
+  
+  // 高亮标签和值
+  highlighted = highlighted.replace(
+    /(\{[^}]*\})/g,
+    (match) => `<span class="label">${match}</span>`
+  )
+  
+  // 高亮数字
+  highlighted = highlighted.replace(
+    /\b(\d+(\.\d+)?)\b/g,
+    '<span class="number">$1</span>'
+  )
+  
+  // 高亮时间单位
+  highlighted = highlighted.replace(
+    /\b(\d+)(s|m|h|d|w|y)\b/g,
+    '<span class="number">$1</span><span class="unit">$2</span>'
+  )
+  
+  return highlighted
+}
 </script>
 
 <style scoped>
@@ -2230,42 +2336,126 @@ input:invalid, select:invalid, textarea:invalid {
 }
 
 .promql-selection {
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 4px;
-  padding: 10px;
-  margin-bottom: 10px;
+  padding: 15px;
+  background: #fff;
+}
+
+.promql-actions {
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .promql-item {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
+  margin-bottom: 12px;
+  padding: 8px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  background: #f8f9fa;
 }
 
-.promql-item:last-child {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
+.promql-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.promql-label {
+  flex: 1;
+  font-weight: 500;
+  cursor: pointer;
 }
 
 .promql-category {
   color: #666;
   font-size: 0.9em;
-  margin-left: 5px;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.promql-details {
+  display: none;
+  margin-top: 8px;
+  padding: 8px;
+  background: #fff;
+  border-radius: 4px;
+}
+
+.promql-details.expanded {
+  display: block;
 }
 
 .promql-query {
-  display: block;
-  color: #007bff;
-  font-size: 0.85em;
-  margin-top: 3px;
-  font-family: monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 500px;
+  margin: 0;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.promql-description {
+  margin-top: 8px;
+  color: #666;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+.expand-btn {
+  padding: 4px 8px;
+  background: #e9ecef;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+.expand-btn:hover {
+  opacity: 1;
+  background: #dee2e6;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background-color: #f0f0f0;
+}
+
+.action-btn:hover {
+  background-color: #e0e0e0;
+}
+
+/* PromQL 语法高亮样式 */
+:deep(.keyword) {
+  color: #0066cc;
+  font-weight: 500;
+}
+
+:deep(.label) {
+  color: #e83e8c;
+}
+
+:deep(.number) {
+  color: #2e7d32;
+}
+
+:deep(.unit) {
+  color: #0066cc;
+  font-weight: 500;
 }
 
 .form-hint {

@@ -19,7 +19,8 @@ ARG VERSION
 
 # 拷贝 go.mod / go.sum 先
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go env -w GOPROXY=https://goproxy.cn,direct && \
+    go mod download
 
 # 拷贝后端源码
 COPY . .
@@ -43,7 +44,7 @@ RUN CGO_ENABLED=1 go build -ldflags "-X main.version=${VERSION}" -o bin/fsvchart
 FROM reg.deeproute.ai/deeproute-public/alpine:latest
 WORKDIR /app
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories && \
-    apk add --no-cache ca-certificates tzdata
+    apk add --no-cache ca-certificates tzdata sqlite
 
 # 拷贝可执行文件
 COPY --from=go-builder /app/bin/fsvchart-notify /app/

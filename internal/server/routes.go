@@ -1977,14 +1977,14 @@ func processPushTasks(db *sql.DB) {
 		log.Printf("[scheduler]   - Last Run: %s", task.LastRunAt)
 		log.Printf("[scheduler]   - Send Times: %s", task.SendTimes)
 
-		// 检查上次运行时间，避免重复执行
-		if task.LastRunAt != "" {
-			lastRun, err := time.Parse("2006-01-02 15:04:05", task.LastRunAt)
-			if err == nil && now.Sub(lastRun) < 5*time.Minute {
-				log.Printf("[scheduler] Task ID=%d was recently executed (less than 5 minutes ago), skipping", task.ID)
-				continue
-			}
-		}
+		// // 检查上次运行时间，避免重复执行
+		// if task.LastRunAt != "" {
+		// 	lastRun, err := time.Parse("2006-01-02 15:04:05", task.LastRunAt)
+		// 	if err == nil && now.Sub(lastRun) < 5*time.Minute {
+		// 		log.Printf("[scheduler] Task ID=%d was recently executed (less than 5 minutes ago), skipping", task.ID)
+		// 		continue
+		// 	}
+		// }
 
 		// 检查是否应该在当前时间执行
 		shouldExecute := false

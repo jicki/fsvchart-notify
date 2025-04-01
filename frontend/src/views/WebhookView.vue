@@ -50,8 +50,6 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { get, post, put, del } from '../utils/api'
 
-const emit = defineEmits(['webhook-updated'])
-
 const feishuWebhooks = ref<any[]>([])
 const newWebhookName = ref('')
 const newWebhookURL = ref('')
@@ -91,7 +89,6 @@ async function addFeishuWebhook() {
     
     // 刷新列表并通知更新
     await fetchFeishuWebhooks()
-    emit('webhook-updated')
   } catch (err) {
     console.error('添加webhook失败:', err)
     alert('添加webhook失败，请重试')
@@ -128,7 +125,6 @@ async function saveEditWebhook(id: number) {
     
     // 刷新列表并通知更新
     await fetchFeishuWebhooks()
-    emit('webhook-updated')
   } catch (err) {
     console.error('更新webhook失败:', err)
     alert('更新webhook失败，请重试')
@@ -144,24 +140,15 @@ async function deleteFeishuWebhook(id: number) {
     
     // 刷新列表并通知更新
     await fetchFeishuWebhooks()
-    emit('webhook-updated')
   } catch (err) {
     console.error('删除webhook失败:', err)
     alert('删除webhook失败，请重试')
   }
 }
 
-// 定期刷新数据
-let refreshInterval: number
-
 onMounted(() => {
   // 初始加载
   fetchFeishuWebhooks()
-  
-  // 设置定期刷新
-  refreshInterval = setInterval(() => {
-    fetchFeishuWebhooks()
-  }, 30000) // 每30秒刷新一次
 })
 
 onUnmounted(() => {
@@ -173,4 +160,47 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.tab-content {
+  padding: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+}
+
+th, td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f5f5f5;
+}
+
+button {
+  margin: 0 5px;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #f5f5f5;
+}
+
+input {
+  padding: 5px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-right: 10px;
+}
+
+label {
+  margin-right: 15px;
+}
 </style>
