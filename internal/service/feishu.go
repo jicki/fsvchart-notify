@@ -291,6 +291,34 @@ func GetSupportedChartType(chartType string) string {
 
 // SendFeishuStandardChart 严格按照飞书官方文档构建图表消息
 func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDataPoints, cardTitle, cardTemplate, unit, buttonText, buttonURL string, showDataLabel bool) error {
+	// 添加发送前的日志
+	log.Printf("[SendFeishuStandardChart] 准备发送消息到 webhook: %s", webhookURL)
+	log.Printf("[SendFeishuStandardChart] 标题: %s, 系列数量: %d", cardTitle, len(queryDataPoints))
+
+	// 检查参数
+	if len(queryDataPoints) == 0 {
+		return fmt.Errorf("no data points provided")
+	}
+
+	// 对数据进行去重
+	uniqueDataPoints := make([]models.QueryDataPoints, 0)
+	seenSeries := make(map[string]bool)
+
+	for _, qdp := range queryDataPoints {
+		// 使用 ChartTitle 作为唯一标识
+		if !seenSeries[qdp.ChartTitle] {
+			seenSeries[qdp.ChartTitle] = true
+			uniqueDataPoints = append(uniqueDataPoints, qdp)
+		} else {
+			log.Printf("[SendFeishuStandardChart] 跳过重复的系列: %s", qdp.ChartTitle)
+		}
+	}
+
+	log.Printf("[SendFeishuStandardChart] 去重后的系列数量: %d", len(uniqueDataPoints))
+
+	// 使用去重后的数据点继续处理
+	queryDataPoints = uniqueDataPoints
+
 	if cardTitle == "" {
 		cardTitle = "数据推送"
 	}
