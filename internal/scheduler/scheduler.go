@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	// 假设你的项目中有：
@@ -13,6 +14,36 @@ import (
 	"fsvchart-notify/internal/models"
 	"fsvchart-notify/internal/service"
 )
+
+// webhookMutexes 用于控制对每个webhook的访问
+var webhookMutexes = struct {
+	sync.RWMutex
+	m map[int64]*sync.Mutex
+}{
+	m: make(map[int64]*sync.Mutex),
+}
+
+// getWebhookMutex 获取指定webhook的互斥锁
+func getWebhookMutex(webhookID int64) *sync.Mutex {
+	webhookMutexes.RLock()
+	if mu, exists := webhookMutexes.m[webhookID]; exists {
+		webhookMutexes.RUnlock()
+		return mu
+	}
+	webhookMutexes.RUnlock()
+
+	webhookMutexes.Lock()
+	defer webhookMutexes.Unlock()
+
+	// 双重检查
+	if mu, exists := webhookMutexes.m[webhookID]; exists {
+		return mu
+	}
+
+	mu := &sync.Mutex{}
+	webhookMutexes.m[webhookID] = mu
+	return mu
+}
 
 // StartScheduler: 启动调度器，每5分钟检查一次任务
 func StartScheduler() {
@@ -209,7 +240,7 @@ func insertPushStatus(db *sql.DB, sourceID, webhookID int64, err error) {
 func runSingleTaskPush(db *sql.DB, taskID int64) {
 	// 获取任务详情
 	var sourceID int64
-	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL string
+	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL, customMetricLabel string
 	var step float64
 	var enabled int
 	var showDataLabel sql.NullInt64 // 使用 sql.NullInt64 来处理 NULL 值
@@ -217,12 +248,13 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	err := db.QueryRow(`
 		SELECT source_id, name, time_range, step, 
 			   card_title, card_template, metric_label, unit,
-			   button_text, button_url, enabled, COALESCE(show_data_label, 0) as show_data_label
+			   button_text, button_url, enabled, COALESCE(show_data_label, 0) as show_data_label,
+			   COALESCE(custom_metric_label, '') as custom_metric_label
 		FROM push_task 
 		WHERE id = ?
 	`, taskID).Scan(&sourceID, &name, &timeRange, &step,
 		&cardTitle, &cardTemplate, &metricLabel, &unit,
-		&buttonText, &buttonURL, &enabled, &showDataLabel)
+		&buttonText, &buttonURL, &enabled, &showDataLabel, &customMetricLabel)
 	if err != nil {
 		log.Printf("[runSingleTaskPush] Error querying task: %v", err)
 		return
@@ -380,7 +412,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 		}
 
 		// 获取数据点
-		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, metricLabel, "")
+		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, metricLabel, customMetricLabel)
 		if err != nil {
 			log.Printf("[runSingleTaskPush] Error fetching metrics for query '%s': %v", query.PromQLName, err)
 			// 记录错误但继续处理其他查询
@@ -410,6 +442,10 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 	// 然后将所有查询结果发送到每个webhook
 	for _, wh := range webhooks {
+		// 获取webhook的互斥锁
+		mu := getWebhookMutex(wh.ID)
+		mu.Lock()
+
 		// 为每个webhook只发送一次，包含所有查询结果
 		var allQueryDataPoints []models.QueryDataPoints
 
@@ -456,16 +492,18 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 				waitTime := 3 * time.Second
 				log.Printf("[runSingleTaskPush] 检测到频率限制错误，等待 %v 后继续", waitTime)
 				time.Sleep(waitTime)
-				continue // 遇到频率限制错误时，跳过当前发送，继续下一个
 			}
 		} else {
 			log.Printf("[runSingleTaskPush] Successfully sent %d unique series to webhook ID=%d",
 				len(allQueryDataPoints), wh.ID)
 			insertPushStatus(db, sourceID, wh.ID, nil)
-
-			// 成功发送后也增加短暂间隔，避免频率限制
-			time.Sleep(500 * time.Millisecond)
 		}
+
+		// 释放互斥锁
+		mu.Unlock()
+
+		// 成功发送后增加短暂间隔，避免频率限制
+		time.Sleep(500 * time.Millisecond)
 
 		// 每个webhook只发送一次，发送完就退出循环
 		break

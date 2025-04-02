@@ -591,8 +591,11 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 
 			// 添加额外调试信息，确认最终使用的标签值
 			log.Printf("[FetchMetrics] Final label value for custom label '%s': '%s'", customLabel, labelValue)
-		} else {
-			// 否则按原逻辑从指标中提取标签
+		}
+
+		// 如果没有自定义标签或自定义标签为空，则使用默认标签
+		if labelValue == "" {
+			// 按原逻辑从指标中提取标签
 			labelValue = result.Metric[seriesType]
 			log.Printf("[FetchMetrics] Trying to extract label '%s' from metrics: %v", seriesType, result.Metric)
 
