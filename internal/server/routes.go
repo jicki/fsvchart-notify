@@ -11,13 +11,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
+
 	"fsvchart-notify/internal/database"
 	"fsvchart-notify/internal/handler"
 	"fsvchart-notify/internal/middleware"
 	"fsvchart-notify/internal/models"
+	"fsvchart-notify/internal/scheduler"
 	"fsvchart-notify/internal/service"
-
-	"github.com/gin-gonic/gin"
 )
 
 // -------------- 1. metrics_source --------------
@@ -1770,8 +1772,8 @@ func runPushTaskHandler(c *gin.Context) {
 		return
 	}
 
-	// 执行任务异步推送
-	go runSingleTaskPush(db, taskID)
+	// 使用scheduler包中的函数，确保任务执行有互斥控制
+	go scheduler.RunSingleTaskPush(db, taskID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "task execution started"})
 }
@@ -1988,15 +1990,6 @@ func processPushTasks(db *sql.DB) {
 		log.Printf("[scheduler]   - Last Run: %s", task.LastRunAt)
 		log.Printf("[scheduler]   - Send Times: %s", task.SendTimes)
 
-		// // 检查上次运行时间，避免重复执行
-		// if task.LastRunAt != "" {
-		// 	lastRun, err := time.Parse("2006-01-02 15:04:05", task.LastRunAt)
-		// 	if err == nil && now.Sub(lastRun) < 5*time.Minute {
-		// 		log.Printf("[scheduler] Task ID=%d was recently executed (less than 5 minutes ago), skipping", task.ID)
-		// 		continue
-		// 	}
-		// }
-
 		// 检查是否应该在当前时间执行
 		shouldExecute := false
 		if task.SendTimes != "" {
@@ -2030,8 +2023,8 @@ func processPushTasks(db *sql.DB) {
 		}
 
 		log.Printf("[scheduler] Executing task ID=%d (%s)", task.ID, task.Name)
-		// 使用与立即执行相同的逻辑
-		go runSingleTaskPush(db, task.ID)
+		// 使用scheduler包中的函数，确保任务执行有互斥控制
+		go scheduler.RunSingleTaskPush(db, task.ID)
 	}
 
 	log.Printf("[scheduler] processPushTasks completed")

@@ -38,6 +38,14 @@ var webhookMutexes = struct {
 	m: make(map[int64]*sync.Mutex),
 }
 
+// taskMutexes 用于控制对每个任务的访问，防止同一任务并行执行
+var taskMutexes = struct {
+	sync.RWMutex
+	m map[int64]*sync.Mutex
+}{
+	m: make(map[int64]*sync.Mutex),
+}
+
 // getWebhookMutex 获取指定webhook的互斥锁
 func getWebhookMutex(webhookID int64) *sync.Mutex {
 	webhookMutexes.RLock()
@@ -57,6 +65,28 @@ func getWebhookMutex(webhookID int64) *sync.Mutex {
 
 	mu := &sync.Mutex{}
 	webhookMutexes.m[webhookID] = mu
+	return mu
+}
+
+// getTaskMutex 获取指定任务的互斥锁
+func getTaskMutex(taskID int64) *sync.Mutex {
+	taskMutexes.RLock()
+	if mu, exists := taskMutexes.m[taskID]; exists {
+		taskMutexes.RUnlock()
+		return mu
+	}
+	taskMutexes.RUnlock()
+
+	taskMutexes.Lock()
+	defer taskMutexes.Unlock()
+
+	// 双重检查
+	if mu, exists := taskMutexes.m[taskID]; exists {
+		return mu
+	}
+
+	mu := &sync.Mutex{}
+	taskMutexes.m[taskID] = mu
 	return mu
 }
 
@@ -290,6 +320,16 @@ func insertPushStatus(db *sql.DB, sourceID, webhookID int64, err error) {
 
 // runSingleTaskPush 执行单个任务的推送
 func runSingleTaskPush(db *sql.DB, taskID int64) {
+	// 获取任务互斥锁，确保同一任务不会并行执行
+	taskMutex := getTaskMutex(taskID)
+
+	// 尝试获取锁
+	if !taskMutex.TryLock() {
+		log.Printf("[TaskQueue] 任务 ID=%d 已经在执行中，跳过本次执行", taskID)
+		return
+	}
+	defer taskMutex.Unlock()
+
 	log.Printf("[TaskQueue] ===== 开始执行任务 ID=%d =====", taskID)
 
 	// 获取任务详情
@@ -533,26 +573,57 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 	log.Printf("[TaskQueue] 共收集到 %d 个唯一数据系列", len(allDataPoints))
 
-	// 发送到webhook
-	webhook := webhooks[0] // 只使用第一个webhook
-	log.Printf("[TaskQueue] 准备发送到webhook (ID=%d)", webhook.ID)
-
-	err = service.SendFeishuStandardChart(webhook.URL, allDataPoints, cardTitle, cardTemplate,
-		unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
-
-	if err != nil {
-		log.Printf("[TaskQueue] 发送失败: %v", err)
-		insertPushStatus(db, sourceID, webhook.ID, err)
-
-		if strings.Contains(err.Error(), "frequency limited") || strings.Contains(err.Error(), "too many request") {
-			waitTime := 3 * time.Second
-			log.Printf("[TaskQueue] 检测到频率限制，等待 %v", waitTime)
-			time.Sleep(waitTime)
-		}
+	// 发送到所有绑定的webhook
+	if len(webhooks) == 0 {
+		log.Printf("[TaskQueue] 任务没有配置webhook，跳过发送")
 	} else {
-		log.Printf("[TaskQueue] 发送成功: %d 个数据系列", len(allDataPoints))
-		insertPushStatus(db, sourceID, webhook.ID, nil)
+		log.Printf("[TaskQueue] 准备发送到 %d 个webhook", len(webhooks))
+
+		// 记录已发送过的webhook，避免重复发送
+		sentWebhooks := make(map[string]bool)
+
+		for _, webhook := range webhooks {
+			// 跳过重复的webhook URL
+			if sentWebhooks[webhook.URL] {
+				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s", webhook.URL)
+				continue
+			}
+
+			log.Printf("[TaskQueue] 准备发送到webhook (ID=%d)", webhook.ID)
+
+			// 添加webhook互斥锁，避免同时向同一webhook发送多个消息
+			webhookMutex := getWebhookMutex(webhook.ID)
+			webhookMutex.Lock()
+
+			err = service.SendFeishuStandardChart(webhook.URL, allDataPoints, cardTitle, cardTemplate,
+				unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
+
+			if err != nil {
+				log.Printf("[TaskQueue] 发送失败: %v", err)
+				insertPushStatus(db, sourceID, webhook.ID, err)
+
+				if strings.Contains(err.Error(), "frequency limited") || strings.Contains(err.Error(), "too many request") {
+					waitTime := 3 * time.Second
+					log.Printf("[TaskQueue] 检测到频率限制，等待 %v", waitTime)
+					time.Sleep(waitTime)
+				}
+			} else {
+				log.Printf("[TaskQueue] 发送成功: %d 个数据系列", len(allDataPoints))
+				insertPushStatus(db, sourceID, webhook.ID, nil)
+
+				// 标记此webhook URL已发送
+				sentWebhooks[webhook.URL] = true
+			}
+
+			webhookMutex.Unlock()
+		}
 	}
 
 	log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 =====\n", taskID)
+}
+
+// RunSingleTaskPush 执行单个任务的推送（公共导出版本）
+// 提供给server包和其他外部包调用，确保任务执行有互斥控制
+func RunSingleTaskPush(db *sql.DB, taskID int64) {
+	runSingleTaskPush(db, taskID)
 }
