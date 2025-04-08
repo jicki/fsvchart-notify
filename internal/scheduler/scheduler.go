@@ -581,11 +581,14 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 		// 记录已发送过的webhook，避免重复发送
 		sentWebhooks := make(map[string]bool)
+		sentCount := 0
+		skippedCount := 0
 
 		for _, webhook := range webhooks {
-			// 跳过重复的webhook URL
+			// 跳过重复的webhook URL（单次任务内）
 			if sentWebhooks[webhook.URL] {
-				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s", webhook.URL)
+				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s (任务内去重)", webhook.URL)
+				skippedCount++
 				continue
 			}
 
@@ -608,15 +611,19 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 					time.Sleep(waitTime)
 				}
 			} else {
+				sentCount++
 				log.Printf("[TaskQueue] 发送成功: %d 个数据系列", len(allDataPoints))
 				insertPushStatus(db, sourceID, webhook.ID, nil)
 
-				// 标记此webhook URL已发送
+				// 标记此webhook URL已发送（仅在当前任务内去重）
 				sentWebhooks[webhook.URL] = true
 			}
 
 			webhookMutex.Unlock()
 		}
+
+		log.Printf("[TaskQueue] 任务完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
+			len(webhooks), sentCount, skippedCount)
 	}
 
 	log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 =====\n", taskID)
