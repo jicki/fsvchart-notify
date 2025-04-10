@@ -15,12 +15,27 @@ import (
 	"fsvchart-notify/internal/service"
 )
 
+// TaskStatus 任务状态
+type TaskStatus struct {
+	LastRunAt    time.Time
+	IsRunning    bool
+	RunCount     int
+	LastRunError error
+	LastSuccess  time.Time
+}
+
 // TaskQueue 任务队列
 type TaskQueue struct {
 	tasks    chan int64
 	running  sync.Map
 	interval time.Duration
+	status   sync.Map // map[int64]*TaskStatus
 }
+
+const (
+	minExecuteInterval = 5 * time.Minute // 最小执行间隔设置为5分钟
+	maxRetries         = 3               // 最大重试次数
+)
 
 var (
 	// 全局任务队列
@@ -90,6 +105,52 @@ func getTaskMutex(taskID int64) *sync.Mutex {
 	return mu
 }
 
+// canExecuteTask 检查任务是否可以执行
+func (q *TaskQueue) canExecuteTask(taskID int64) bool {
+	if status, exists := q.status.Load(taskID); exists {
+		taskStatus := status.(*TaskStatus)
+		if taskStatus.IsRunning {
+			log.Printf("[TaskQueue] 任务 %d 正在运行中，跳过执行", taskID)
+			return false
+		}
+
+		timeSinceLastRun := time.Since(taskStatus.LastRunAt)
+		if timeSinceLastRun < minExecuteInterval {
+			log.Printf("[TaskQueue] 任务 %d 执行间隔太短（最后执行：%s，间隔：%v），跳过执行",
+				taskID, taskStatus.LastRunAt.Format("2006-01-02 15:04:05"), timeSinceLastRun)
+			return false
+		}
+	}
+	return true
+}
+
+// updateTaskStatus 更新任务状态
+func (q *TaskQueue) updateTaskStatus(taskID int64, running bool, err error) {
+	var status *TaskStatus
+	if existingStatus, exists := q.status.Load(taskID); exists {
+		status = existingStatus.(*TaskStatus)
+		status.IsRunning = running
+		if err != nil {
+			status.LastRunError = err
+		} else if !running {
+			status.LastSuccess = time.Now()
+		}
+		if !running {
+			status.RunCount++
+			status.LastRunAt = time.Now()
+		}
+	} else {
+		status = &TaskStatus{
+			LastRunAt:    time.Now(),
+			IsRunning:    running,
+			RunCount:     1,
+			LastRunError: err,
+			LastSuccess:  time.Now(),
+		}
+	}
+	q.status.Store(taskID, status)
+}
+
 // StartScheduler: 启动调度器
 func StartScheduler() {
 	log.Println("[scheduler] Starting scheduler...")
@@ -97,16 +158,12 @@ func StartScheduler() {
 	// 启动任务执行器
 	go taskQueue.run()
 
-	// 立即执行一次，处理服务重启期间可能错过的任务
-	processPushTasks()
-
 	// 创建定时器，每1分钟检查一次
 	ticker := time.NewTicker(1 * time.Minute)
 
 	// 启动后台goroutine持续运行
 	go func() {
-		defer ticker.Stop() // 确保ticker最终会被停止
-
+		defer ticker.Stop()
 		for range ticker.C {
 			log.Println("[scheduler] Ticker triggered, processing tasks...")
 			processPushTasks()
@@ -125,28 +182,29 @@ func (q *TaskQueue) run() {
 		taskCount++
 		log.Printf("[TaskQueue] ====== 开始处理第 %d 个任务 [ID=%d] ======", taskCount, taskID)
 
-		// 检查任务是否已经在运行
-		if _, running := q.running.LoadOrStore(taskID, true); running {
-			log.Printf("[TaskQueue] 任务 %d 已在运行中，跳过执行", taskID)
+		// 检查任务是否可以执行
+		if !q.canExecuteTask(taskID) {
 			continue
 		}
+
+		// 更新任务状态为运行中
+		q.updateTaskStatus(taskID, true, nil)
 
 		// 记录任务开始时间
 		startTime := time.Now()
 		log.Printf("[TaskQueue] 任务 %d 开始执行，时间: %s", taskID, startTime.Format("2006-01-02 15:04:05"))
 
 		// 执行任务
-		runSingleTaskPush(database.GetDB(), taskID)
+		err := runSingleTaskPush(database.GetDB(), taskID)
+
+		// 更新任务状态为已完成
+		q.updateTaskStatus(taskID, false, err)
 
 		// 记录任务结束时间和执行时长
 		endTime := time.Now()
 		duration := endTime.Sub(startTime)
 		log.Printf("[TaskQueue] 任务 %d 执行完成，结束时间: %s，耗时: %.2f 秒",
 			taskID, endTime.Format("2006-01-02 15:04:05"), duration.Seconds())
-
-		// 任务完成后从运行map中移除
-		q.running.Delete(taskID)
-		log.Printf("[TaskQueue] 任务 %d 已从运行列表中移除", taskID)
 
 		// 添加间隔，避免频率限制
 		log.Printf("[TaskQueue] 等待 %v 后处理下一个任务...", q.interval)
@@ -158,9 +216,8 @@ func (q *TaskQueue) run() {
 
 // addTask 添加任务到队列
 func (q *TaskQueue) addTask(taskID int64) {
-	// 如果任务已经在运行，则跳过
-	if _, running := q.running.Load(taskID); running {
-		log.Printf("[TaskQueue] 任务 %d 已在运行中，不再加入队列", taskID)
+	// 检查任务是否可以执行
+	if !q.canExecuteTask(taskID) {
 		return
 	}
 
@@ -232,6 +289,12 @@ func processPushTasks() {
 			continue
 		}
 
+		// 检查任务状态
+		if !taskQueue.canExecuteTask(task.ID) {
+			log.Printf("[scheduler] 任务 %d 不满足执行条件，跳过", task.ID)
+			continue
+		}
+
 		// 检查上次运行时间
 		if task.LastRunAt != "" {
 			lastRun, err := time.Parse("2006-01-02 15:04:05", task.LastRunAt)
@@ -242,6 +305,8 @@ func processPushTasks() {
 
 			// 如果距离上次运行时间不足调度间隔，则跳过
 			if now.Sub(lastRun).Seconds() < float64(task.SchedInterval) {
+				log.Printf("[scheduler] 任务 %d 距离上次执行时间不足 %d 秒，跳过",
+					task.ID, task.SchedInterval)
 				continue
 			}
 		}
@@ -319,14 +384,14 @@ func insertPushStatus(db *sql.DB, sourceID, webhookID int64, err error) {
 }
 
 // runSingleTaskPush 执行单个任务的推送
-func runSingleTaskPush(db *sql.DB, taskID int64) {
+func runSingleTaskPush(db *sql.DB, taskID int64) error {
 	// 获取任务互斥锁，确保同一任务不会并行执行
 	taskMutex := getTaskMutex(taskID)
 
 	// 尝试获取锁
 	if !taskMutex.TryLock() {
 		log.Printf("[TaskQueue] 任务 ID=%d 已经在执行中，跳过本次执行", taskID)
-		return
+		return nil
 	}
 	defer taskMutex.Unlock()
 
@@ -351,7 +416,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 		&buttonText, &buttonURL, &enabled, &showDataLabel, &customMetricLabel)
 	if err != nil {
 		log.Printf("[TaskQueue] 获取任务详情失败: %v", err)
-		return
+		return err
 	}
 
 	log.Printf("[TaskQueue] 任务信息: name=%s, timeRange=%s, step=%v", name, timeRange, step)
@@ -359,7 +424,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	// 检查任务是否启用
 	if enabled != 1 {
 		log.Printf("[TaskQueue] 任务未启用，跳过执行")
-		return
+		return nil
 	}
 
 	// 获取数据源URL
@@ -367,7 +432,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	err = db.QueryRow("SELECT url FROM metrics_source WHERE id = ?", sourceID).Scan(&sourceURL)
 	if err != nil {
 		log.Printf("[TaskQueue] 获取数据源失败: %v", err)
-		return
+		return err
 	}
 
 	// 使用map进行查询去重
@@ -387,7 +452,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	`, taskID)
 	if err != nil {
 		log.Printf("[TaskQueue] 查询PromQL失败: %v", err)
-		return
+		return err
 	}
 	defer rows.Close()
 
@@ -476,7 +541,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	// 如果仍然没有查询，记录错误并返回
 	if len(uniqueQueries) == 0 {
 		log.Printf("[TaskQueue] 未找到任何有效查询，任务终止")
-		return
+		return nil
 	}
 
 	// 解析time_range为持续时间
@@ -494,7 +559,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	`, taskID)
 	if err != nil {
 		log.Printf("[TaskQueue] 获取webhook失败: %v", err)
-		return
+		return err
 	}
 	defer webhookRows.Close()
 
@@ -517,7 +582,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 	if len(webhooks) == 0 {
 		log.Printf("[TaskQueue] 未找到webhook配置，任务终止")
-		return
+		return nil
 	}
 
 	log.Printf("[TaskQueue] 找到 %d 个webhook配置", len(webhooks))
@@ -568,7 +633,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 	if len(allDataPoints) == 0 {
 		log.Printf("[TaskQueue] 未获取到任何数据点，任务终止")
-		return
+		return nil
 	}
 
 	log.Printf("[TaskQueue] 共收集到 %d 个唯一数据系列", len(allDataPoints))
@@ -627,10 +692,22 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 	}
 
 	log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 =====\n", taskID)
+	return nil
 }
 
 // RunSingleTaskPush 执行单个任务的推送（公共导出版本）
 // 提供给server包和其他外部包调用，确保任务执行有互斥控制
-func RunSingleTaskPush(db *sql.DB, taskID int64) {
-	runSingleTaskPush(db, taskID)
+func RunSingleTaskPush(db *sql.DB, taskID int64) error {
+	// 检查任务是否可以执行
+	if !taskQueue.canExecuteTask(taskID) {
+		return fmt.Errorf("任务 %d 不满足执行条件", taskID)
+	}
+
+	// 更新任务状态为运行中
+	taskQueue.updateTaskStatus(taskID, true, nil)
+	defer func() {
+		taskQueue.updateTaskStatus(taskID, false, nil)
+	}()
+
+	return runSingleTaskPush(db, taskID)
 }

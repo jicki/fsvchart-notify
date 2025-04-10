@@ -1757,12 +1757,12 @@ func deletePromQL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"id": id})
 }
 
-// POST /api/push_task/:id/run
+// runPushTaskHandler 手动执行任务的处理函数
 func runPushTaskHandler(c *gin.Context) {
 	idStr := c.Param("id")
 	taskID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的任务ID"})
 		return
 	}
 
@@ -1772,10 +1772,34 @@ func runPushTaskHandler(c *gin.Context) {
 		return
 	}
 
-	// 使用scheduler包中的函数，确保任务执行有互斥控制
-	go scheduler.RunSingleTaskPush(db, taskID)
+	// 检查任务是否存在且启用
+	var enabled int
+	err = db.QueryRow("SELECT enabled FROM push_task WHERE id = ?", taskID).Scan(&enabled)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "任务不存在"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询任务状态失败"})
+		}
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "task execution started"})
+	if enabled != 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "任务未启用"})
+		return
+	}
+
+	// 使用scheduler包中的函数执行任务
+	go func() {
+		if err := scheduler.RunSingleTaskPush(db, taskID); err != nil {
+			log.Printf("[runPushTaskHandler] 任务 %d 执行失败: %v", taskID, err)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "任务执行已开始",
+		"task_id": taskID,
+	})
 }
 
 // initScheduler 初始化调度器
