@@ -300,6 +300,88 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 		return fmt.Errorf("no data points provided")
 	}
 
+	// 对每个查询的数据点进行预处理
+	for i := range queryDataPoints {
+		if len(queryDataPoints[i].DataPoints) == 0 {
+			continue
+		}
+
+		// 按类型分组数据点
+		typeGroups := make(map[string][]models.DataPoint)
+		for _, dp := range queryDataPoints[i].DataPoints {
+			typeGroups[dp.Type] = append(typeGroups[dp.Type], dp)
+		}
+
+		// 找出整体的时间范围
+		var minTime, maxTime int64
+		first := true
+		for _, points := range typeGroups {
+			for _, p := range points {
+				if first || p.UnixTime < minTime {
+					minTime = p.UnixTime
+				}
+				if first || p.UnixTime > maxTime {
+					maxTime = p.UnixTime
+				}
+				first = false
+			}
+		}
+
+		// 确定时间间隔
+		interval := int64(8 * 3600) // 默认8小时
+		for _, points := range typeGroups {
+			if len(points) > 1 {
+				// 对每个类型的点按时间排序
+				sort.Slice(points, func(i, j int) bool {
+					return points[i].UnixTime < points[j].UnixTime
+				})
+				// 计算最小时间间隔
+				for i := 1; i < len(points); i++ {
+					diff := points[i].UnixTime - points[i-1].UnixTime
+					if diff > 0 && diff < interval {
+						interval = diff
+					}
+				}
+			}
+		}
+
+		// 处理每个类型的数据点
+		var processedPoints []models.DataPoint
+		for seriesType, points := range typeGroups {
+			// 创建时间点映射
+			timeMap := make(map[int64]models.DataPoint)
+			for _, p := range points {
+				timeMap[p.UnixTime] = p
+			}
+
+			// 补充缺失的时间点
+			for t := minTime; t <= maxTime; t += interval {
+				if dp, exists := timeMap[t]; exists {
+					processedPoints = append(processedPoints, dp)
+				} else {
+					// 补充缺失的点，值设为0
+					processedPoints = append(processedPoints, models.DataPoint{
+						Time:     time.Unix(t, 0).Format("15:04"),
+						UnixTime: t,
+						Value:    0,
+						Type:     seriesType,
+					})
+				}
+			}
+		}
+
+		// 最终按时间和类型排序
+		sort.Slice(processedPoints, func(i, j int) bool {
+			if processedPoints[i].UnixTime == processedPoints[j].UnixTime {
+				return processedPoints[i].Type < processedPoints[j].Type
+			}
+			return processedPoints[i].UnixTime < processedPoints[j].UnixTime
+		})
+
+		// 更新处理后的数据点
+		queryDataPoints[i].DataPoints = processedPoints
+	}
+
 	// 对数据进行去重
 	uniqueDataPoints := make([]models.QueryDataPoints, 0)
 	seenSeries := make(map[string]bool)
