@@ -156,11 +156,27 @@
         });
     });
     
-    // 开始监听页面变化
-    observer.observe(document.body, { childList: true, subtree: true });
+    // 等待 DOM 加载完成后再开始监听
+    function initObserver() {
+        if (document.body) {
+            // 开始监听页面变化
+            observer.observe(document.body, { childList: true, subtree: true });
+            
+            // 立即设置点击处理
+            setupClickHandlers();
+            
+            console.log('前端数据修复脚本已加载');
+        } else {
+            console.warn('document.body 尚未加载，等待...');
+            // 如果 body 还不存在，等待一下再尝试
+            setTimeout(initObserver, 100);
+        }
+    }
     
-    // 立即设置点击处理
-    setupClickHandlers();
-    
-    console.log('前端数据修复脚本已加载');
+    // 如果 DOM 已经加载完成，立即初始化；否则等待 DOMContentLoaded 事件
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initObserver);
+    } else {
+        initObserver();
+    }
 })(); 

@@ -334,7 +334,7 @@
                     删除
                 </button>
             </div>
-            <button @click="addSendTime" class="add-time-btn">添加发送时间</button>
+            <button type="button" @click="addSendTime" class="add-time-btn">添加发送时间</button>
         </div>
         <div class="form-hint">可以添加多个发送时间，每个时间点都会触发发送</div>
     </div>
@@ -532,7 +532,7 @@
                     删除
                 </button>
             </div>
-            <button @click="addSendTime(true)" class="add-time-btn">添加发送时间</button>
+            <button type="button" @click="addSendTime(true)" class="add-time-btn">添加发送时间</button>
         </div>
         <div class="form-hint">可以添加多个发送时间，每个时间点都会触发发送</div>
     </div>
