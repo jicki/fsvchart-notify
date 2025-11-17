@@ -504,14 +504,22 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 			defer queryRows.Close()
 			for queryRows.Next() {
 				var q struct {
-					Query           string
-					ChartTemplateID int64
-					PromQLName      string
+					Query             string
+					ChartTemplateID   int64
+					PromQLName        string
+					Unit              string
+					MetricLabel       string
+					CustomMetricLabel string
 				}
 				if err := queryRows.Scan(&q.Query, &q.ChartTemplateID); err != nil {
 					log.Printf("[TaskQueue] 扫描查询行失败: %v", err)
 					continue
 				}
+
+				// 使用任务级别的配置作为默认值
+				q.Unit = unit
+				q.MetricLabel = metricLabel
+				q.CustomMetricLabel = customMetricLabel
 
 				// 使用查询内容作为去重键
 				if !seenQueries[q.Query] {
@@ -534,13 +542,19 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 
 			if err == nil && query != "" && !seenQueries[query] {
 				uniqueQueries = append(uniqueQueries, struct {
-					Query           string
-					ChartTemplateID int64
-					PromQLName      string
+					Query             string
+					ChartTemplateID   int64
+					PromQLName        string
+					Unit              string
+					MetricLabel       string
+					CustomMetricLabel string
 				}{
-					Query:           query,
-					ChartTemplateID: chartTemplateID,
-					PromQLName:      "",
+					Query:             query,
+					ChartTemplateID:   chartTemplateID,
+					PromQLName:        "",
+					Unit:              unit,
+					MetricLabel:       metricLabel,
+					CustomMetricLabel: customMetricLabel,
 				})
 				log.Printf("[TaskQueue] 添加任务表中的查询: %s", query)
 			}
