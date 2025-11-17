@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 7 // 版本7: 添加show_data_label列到push_task表
+const CurrentSchemaVersion = 9 // 版本9: 添加push_mode列到push_task表，并迁移配置数据
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {
@@ -37,6 +37,18 @@ var currentStructures = map[string]TableStructure{
 			"button_text":         "TEXT",
 			"button_url":          "TEXT",
 			"show_data_label":     "INTEGER",
+			"push_mode":           "TEXT",
+		},
+	},
+	"push_task_promql": {
+		RequiredColumns: map[string]string{
+			"id":                  "INTEGER",
+			"task_id":             "INTEGER",
+			"promql_id":           "INTEGER",
+			"chart_template_id":   "INTEGER",
+			"unit":                "TEXT",
+			"metric_label":        "TEXT",
+			"custom_metric_label": "TEXT",
 		},
 	},
 	// 其他表可以按需添加...
@@ -216,6 +228,32 @@ var migrations = []Migration{
 		Description: "添加show_data_label列到push_task表",
 		SQL: `
 		ALTER TABLE push_task ADD COLUMN show_data_label INTEGER DEFAULT 0;
+		`,
+	},
+	{
+		Version:     8,
+		Description: "为push_task_promql表添加unit、metric_label、custom_metric_label列",
+		SQL: `
+		ALTER TABLE push_task_promql ADD COLUMN unit TEXT DEFAULT '';
+		ALTER TABLE push_task_promql ADD COLUMN metric_label TEXT DEFAULT 'pod';
+		ALTER TABLE push_task_promql ADD COLUMN custom_metric_label TEXT DEFAULT '';
+		`,
+	},
+	{
+		Version:     9,
+		Description: "添加push_mode列到push_task表，并迁移配置数据",
+		SQL: `
+		-- 添加push_mode列
+		ALTER TABLE push_task ADD COLUMN push_mode TEXT DEFAULT 'chart';
+		
+		-- 迁移现有任务的配置到push_task_promql表
+		-- 为所有现有的push_task_promql记录设置unit和metric_label
+		UPDATE push_task_promql
+		SET 
+			unit = (SELECT unit FROM push_task WHERE push_task.id = push_task_promql.task_id),
+			metric_label = (SELECT COALESCE(metric_label, 'pod') FROM push_task WHERE push_task.id = push_task_promql.task_id),
+			custom_metric_label = (SELECT COALESCE(custom_metric_label, '') FROM push_task WHERE push_task.id = push_task_promql.task_id)
+		WHERE EXISTS (SELECT 1 FROM push_task WHERE push_task.id = push_task_promql.task_id);
 		`,
 	},
 }

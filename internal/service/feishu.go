@@ -1475,3 +1475,156 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 
 	return lastErr
 }
+
+// SendFeishuTextCard 发送文本卡片消息到飞书
+// 此函数用于以纯文本格式展示多个 PromQL 查询的最新值
+//
+// 参数说明:
+//   - webhookURL: 飞书 webhook URL
+//   - promqlMetrics: 每个 PromQL 的最新指标值列表，格式为 map[promqlName][]LatestMetric
+//   - promqlConfigs: 每个 PromQL 的配置（单位、标签等）
+//   - cardTitle: 卡片标题
+//   - cardTemplate: 卡片颜色主题（"blue", "red", "green" 等）
+//   - buttonText: 按钮文本（可选）
+//   - buttonURL: 按钮链接（可选）
+func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetric, promqlConfigs map[string]struct {
+	Name              string
+	Unit              string
+	MetricLabel       string
+	CustomMetricLabel string
+}, cardTitle, cardTemplate, buttonText, buttonURL string) error {
+	log.Printf("[SendFeishuTextCard] ====== START ======")
+	log.Printf("[SendFeishuTextCard] Webhook: %s, CardTitle: %s", webhookURL, cardTitle)
+
+	// 构建卡片
+	card := &FeishuCard{
+		MsgType: "interactive",
+		Card: FeishuCardBody{
+			Config: &FeishuCardConfig{
+				WideScreenMode: true,
+				EnableForward:  true,
+			},
+			Header: &FeishuCardHeader{
+				Title: &FeishuCardHeaderTitle{
+					Content: cardTitle,
+					Tag:     "plain_text",
+				},
+				Template: cardTemplate,
+			},
+			Elements: []FeishuCardElement{},
+		},
+	}
+
+	// 为每个 PromQL 添加一个部分
+	for promqlName, metrics := range promqlMetrics {
+		config, hasConfig := promqlConfigs[promqlName]
+		if !hasConfig {
+			log.Printf("[SendFeishuTextCard] Warning: No config found for PromQL '%s'", promqlName)
+			continue
+		}
+
+		// 添加 PromQL 名称和单位作为标题
+		titleText := fmt.Sprintf("**%s**", promqlName)
+		if config.Unit != "" {
+			titleText = fmt.Sprintf("**%s** (%s)", promqlName, config.Unit)
+		}
+
+		card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+			Tag:     "markdown",
+			Content: titleText,
+		})
+
+		// 如果没有指标数据，显示无数据
+		if len(metrics) == 0 {
+			card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+				Tag:     "markdown",
+				Content: "└─ 暂无数据",
+			})
+		} else {
+			// 排序指标（按标签名称）
+			sort.Slice(metrics, func(i, j int) bool {
+				return metrics[i].Label < metrics[j].Label
+			})
+
+			// 显示每个指标的最新值
+			for i, metric := range metrics {
+				var prefix string
+				if i < len(metrics)-1 {
+					prefix = "├─"
+				} else {
+					prefix = "└─"
+				}
+
+				// 格式化值
+				valueStr := formatValue(metric.Value, config.Unit)
+
+				// 构建显示文本
+				displayText := fmt.Sprintf("%s %s: %s", prefix, metric.Label, valueStr)
+
+				card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+					Tag:     "markdown",
+					Content: displayText,
+				})
+			}
+		}
+
+		// 添加分隔线（除了最后一个）
+		// 我们需要先收集所有 PromQL，然后判断是否是最后一个
+		// 暂时先不添加分隔线，因为 map 的遍历是无序的
+	}
+
+	// 添加数据采集时间
+	now := time.Now().In(ChinaTimezone)
+	timeText := fmt.Sprintf("⏰ 数据时间: %s", now.Format("2006-01-02 15:04"))
+	card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+		Tag:     "markdown",
+		Content: timeText,
+	})
+
+	// 添加按钮（如果提供）
+	if buttonText != "" && buttonURL != "" {
+		card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+			Tag: "action",
+			Actions: []FeishuAction{
+				{
+					Tag: "button",
+					Text: &FeishuActionText{
+						Content: buttonText,
+						Tag:     "plain_text",
+					},
+					Type: "default",
+					Value: map[string]string{
+						"url": buttonURL,
+					},
+				},
+			},
+		})
+	}
+
+	// 发送消息
+	err := SendFeishuCardMessage(webhookURL, card)
+	if err != nil {
+		log.Printf("[SendFeishuTextCard] Failed to send message: %v", err)
+		return err
+	}
+
+	log.Printf("[SendFeishuTextCard] ====== END ======")
+	return nil
+}
+
+// formatValue 格式化值，添加单位
+func formatValue(value float64, unit string) string {
+	// 格式化为两位小数
+	valueStr := fmt.Sprintf("%.2f", value)
+
+	// 移除尾部多余的零
+	valueStr = strings.TrimRight(valueStr, "0")
+	valueStr = strings.TrimRight(valueStr, ".")
+
+	// 添加单位
+	if unit != "" {
+		return fmt.Sprintf("%s %s", valueStr, unit)
+	}
+
+	return valueStr
+}

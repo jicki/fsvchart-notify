@@ -912,3 +912,156 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 
 	return allPoints, nil
 }
+
+// LatestMetric 表示一个时间序列的最新指标值
+type LatestMetric struct {
+	Label string    `json:"label"` // 标签值（如pod名称、namespace等）
+	Value float64   `json:"value"` // 最新值
+	Time  time.Time `json:"time"`  // 最新值的时间戳
+}
+
+// FetchLatestMetrics 从VictoriaMetrics获取指标的最新值
+//
+// 参数说明:
+//   - baseURL: 指标源的基础URL
+//   - query: PromQL查询语句
+//   - seriesType: 默认的标签名称，用于从指标中提取序列名称（当customLabel为空时使用）
+//   - customLabel: 自定义标签名称，用于从指标数据中提取对应的值作为标签
+//
+// 返回值:
+//   - []LatestMetric: 每个时间序列的最新指标值列表
+//   - error: 错误信息
+func FetchLatestMetrics(baseURL, query, seriesType, customLabel string) ([]LatestMetric, error) {
+	log.Printf("[FetchLatestMetrics] ====== START ======")
+	log.Printf("[FetchLatestMetrics] Query: %s, SeriesType: %s, CustomLabel: %s",
+		query, seriesType, customLabel)
+
+	// 构建查询 URL - 使用 query 接口获取即时值
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	u.Path = path.Join(u.Path, "/api/v1/query")
+
+	params := url.Values{}
+	params.Set("query", query)
+	u.RawQuery = params.Encode()
+
+	log.Printf("[FetchLatestMetrics] Requesting URL: %s", u.String())
+
+	// 发送 HTTP 请求
+	resp, err := http.Get(u.String())
+	if err != nil {
+		log.Printf("[FetchLatestMetrics] ERROR: HTTP request failed: %v", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("[FetchLatestMetrics] Response status code: %d", resp.StatusCode)
+
+	// 解析 JSON
+	var vmResp struct {
+		Status string `json:"status"`
+		Data   struct {
+			ResultType string `json:"resultType"`
+			Result     []struct {
+				Metric map[string]string `json:"metric"`
+				Value  []interface{}     `json:"value"` // [timestamp, value]
+			} `json:"result"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &vmResp); err != nil {
+		return nil, err
+	}
+
+	log.Printf("[FetchLatestMetrics] Response status: %s, Result count: %d",
+		vmResp.Status, len(vmResp.Data.Result))
+
+	// 检查响应状态
+	if vmResp.Status != "success" {
+		return nil, fmt.Errorf("query failed: %s", vmResp.Status)
+	}
+
+	// 处理每个时间序列，提取最新值
+	var latestMetrics []LatestMetric
+	for _, result := range vmResp.Data.Result {
+		log.Printf("[FetchLatestMetrics] Raw metric data: %+v", result.Metric)
+
+		// 确定标签值
+		var labelValue string
+		if customLabel != "" {
+			// 使用指标中的自定义标签值
+			labelValue = result.Metric[customLabel]
+			log.Printf("[FetchLatestMetrics] Using custom label '%s' with value '%s'", customLabel, labelValue)
+
+			// 如果找不到该标签，跳过这个结果
+			if labelValue == "" {
+				log.Printf("[FetchLatestMetrics] WARNING: Custom label '%s' not found in metrics, skipping this series", customLabel)
+				continue
+			}
+		} else {
+			// 使用默认标签
+			labelValue = result.Metric[seriesType]
+			log.Printf("[FetchLatestMetrics] Using default label '%s' with value '%s'", seriesType, labelValue)
+
+			if labelValue == "" {
+				// 回退处理：使用第一个非 __name__ 的标签
+				for k, v := range result.Metric {
+					if k != "__name__" {
+						labelValue = v
+						log.Printf("[FetchLatestMetrics] Using fallback label '%s' with value '%s'", k, v)
+						break
+					}
+				}
+			}
+
+			// 如果仍然没有找到标签值，使用默认标签
+			if labelValue == "" {
+				labelValue = "指标"
+				log.Printf("[FetchLatestMetrics] Using default label '指标'")
+			}
+		}
+
+		// 解析值
+		if len(result.Value) < 2 {
+			log.Printf("[FetchLatestMetrics] WARNING: Invalid value format, skipping")
+			continue
+		}
+
+		timestamp := int64(result.Value[0].(float64))
+		valueStr := result.Value[1].(string)
+
+		// 转换值为 float64
+		value, err := strconv.ParseFloat(valueStr, 64)
+		if err != nil {
+			log.Printf("[FetchLatestMetrics] ERROR: Failed to parse value '%s': %v", valueStr, err)
+			continue
+		}
+
+		// 四舍五入到两位小数
+		value = math.Round(value*100) / 100
+
+		// 创建最新指标记录
+		latestMetric := LatestMetric{
+			Label: labelValue,
+			Value: value,
+			Time:  time.Unix(timestamp, 0),
+		}
+
+		latestMetrics = append(latestMetrics, latestMetric)
+		log.Printf("[FetchLatestMetrics] Added metric: Label=%s, Value=%.2f, Time=%s",
+			latestMetric.Label, latestMetric.Value, latestMetric.Time.Format("2006-01-02 15:04:05"))
+	}
+
+	log.Printf("[FetchLatestMetrics] ====== END ======")
+	log.Printf("[FetchLatestMetrics] Total latest metrics: %d", len(latestMetrics))
+
+	return latestMetrics, nil
+}

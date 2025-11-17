@@ -399,7 +399,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 
 	// 获取任务详情
 	var sourceID int64
-	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL, customMetricLabel string
+	var name, timeRange, cardTitle, cardTemplate, metricLabel, unit, buttonText, buttonURL, customMetricLabel, pushMode string
 	var step float64
 	var enabled int
 	var showDataLabel sql.NullInt64
@@ -408,12 +408,13 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		SELECT source_id, name, time_range, step, 
 		       card_title, card_template, metric_label, unit,
 		       button_text, button_url, enabled, COALESCE(show_data_label, 0) as show_data_label,
-		       COALESCE(custom_metric_label, '') as custom_metric_label
+		       COALESCE(custom_metric_label, '') as custom_metric_label,
+		       COALESCE(push_mode, 'chart') as push_mode
 		FROM push_task 
 		WHERE id = ?
 	`, taskID).Scan(&sourceID, &name, &timeRange, &step,
 		&cardTitle, &cardTemplate, &metricLabel, &unit,
-		&buttonText, &buttonURL, &enabled, &showDataLabel, &customMetricLabel)
+		&buttonText, &buttonURL, &enabled, &showDataLabel, &customMetricLabel, &pushMode)
 	if err != nil {
 		log.Printf("[TaskQueue] 获取任务详情失败: %v", err)
 		return err
@@ -438,14 +439,20 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 	// 使用map进行查询去重
 	seenQueries := make(map[string]bool)
 	var uniqueQueries []struct {
-		Query           string
-		ChartTemplateID int64
-		PromQLName      string
+		Query             string
+		ChartTemplateID   int64
+		PromQLName        string
+		Unit              string
+		MetricLabel       string
+		CustomMetricLabel string
 	}
 
-	// 查询任务的所有查询
+	// 查询任务的所有查询及其独立配置
 	rows, err := db.Query(`
-		SELECT ptp.promql_id, p.query, ptp.chart_template_id, p.name
+		SELECT ptp.promql_id, p.query, ptp.chart_template_id, p.name,
+		       COALESCE(ptp.unit, '') as unit,
+		       COALESCE(ptp.metric_label, 'pod') as metric_label,
+		       COALESCE(ptp.custom_metric_label, '') as custom_metric_label
 		FROM push_task_promql ptp
 		JOIN promql p ON ptp.promql_id = p.id
 		WHERE ptp.task_id = ?
@@ -460,11 +467,15 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 	for rows.Next() {
 		var promqlID int64
 		var q struct {
-			Query           string
-			ChartTemplateID int64
-			PromQLName      string
+			Query             string
+			ChartTemplateID   int64
+			PromQLName        string
+			Unit              string
+			MetricLabel       string
+			CustomMetricLabel string
 		}
-		if err := rows.Scan(&promqlID, &q.Query, &q.ChartTemplateID, &q.PromQLName); err != nil {
+		if err := rows.Scan(&promqlID, &q.Query, &q.ChartTemplateID, &q.PromQLName,
+			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel); err != nil {
 			log.Printf("[TaskQueue] 扫描PromQL行失败: %v", err)
 			continue
 		}
@@ -473,7 +484,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		if !seenQueries[q.Query] {
 			seenQueries[q.Query] = true
 			uniqueQueries = append(uniqueQueries, q)
-			log.Printf("[TaskQueue] 添加唯一查询: %s", q.Query)
+			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s)", q.Query, q.Unit, q.MetricLabel)
 		} else {
 			log.Printf("[TaskQueue] 跳过重复查询: %s", q.Query)
 		}
@@ -586,85 +597,188 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 	}
 
 	log.Printf("[TaskQueue] 找到 %d 个webhook配置", len(webhooks))
+	log.Printf("[TaskQueue] 推送模式: %s", pushMode)
 
-	// 为每个查询获取数据点
-	var allDataPoints []models.QueryDataPoints
-	seenSeries := make(map[string]bool) // 用于系列去重
+	// 根据 push_mode 选择不同的数据获取和发送逻辑
+	if pushMode == "text" {
+		// 文本模式：获取每个 PromQL 的最新值
+		log.Printf("[TaskQueue] 使用文本模式，获取最新指标值")
 
-	for i, query := range uniqueQueries {
-		// 获取图表类型
-		var chartType string
-		err = db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)
-		if err != nil {
-			log.Printf("[TaskQueue] 获取图表类型失败 (ID=%d): %v，使用默认类型 'area'", query.ChartTemplateID, err)
-			chartType = "area"
+		// 为每个 PromQL 获取最新值
+		promqlMetrics := make(map[string][]service.LatestMetric)
+		promqlConfigs := make(map[string]struct {
+			Name              string
+			Unit              string
+			MetricLabel       string
+			CustomMetricLabel string
+		})
+
+		for i, query := range uniqueQueries {
+			log.Printf("[TaskQueue] 获取查询 %d 的最新指标值: %s", i+1, query.Query)
+
+			// 确定使用哪个标签
+			queryMetricLabel := query.MetricLabel
+			queryCustomLabel := query.CustomMetricLabel
+			if queryMetricLabel == "" {
+				queryMetricLabel = metricLabel
+			}
+
+			// 获取最新指标值
+			latestMetrics, err := service.FetchLatestMetrics(sourceURL, query.Query, queryMetricLabel, queryCustomLabel)
+			if err != nil {
+				log.Printf("[TaskQueue] 获取最新指标值失败: %v", err)
+				continue
+			}
+
+			promqlName := query.PromQLName
+			if promqlName == "" {
+				promqlName = fmt.Sprintf("查询 %d", i+1)
+			}
+
+			promqlMetrics[promqlName] = latestMetrics
+			promqlConfigs[promqlName] = struct {
+				Name              string
+				Unit              string
+				MetricLabel       string
+				CustomMetricLabel string
+			}{
+				Name:              promqlName,
+				Unit:              query.Unit,
+				MetricLabel:       queryMetricLabel,
+				CustomMetricLabel: queryCustomLabel,
+			}
+
+			log.Printf("[TaskQueue] PromQL '%s' 获取到 %d 个最新指标", promqlName, len(latestMetrics))
 		}
 
-		chartType = service.GetSupportedChartType(chartType)
-		log.Printf("[TaskQueue] 查询 %d: 使用图表类型 %s", i+1, chartType)
-
-		// 获取数据点
-		log.Printf("[TaskQueue] 开始获取查询 %d 的指标数据: %s", i+1, query.Query)
-		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, metricLabel, customMetricLabel)
-		if err != nil {
-			log.Printf("[TaskQueue] 获取指标数据失败: %v", err)
-			continue
+		if len(promqlMetrics) == 0 {
+			log.Printf("[TaskQueue] 未获取到任何最新指标，任务终止")
+			return nil
 		}
 
-		// 生成图表标题
-		chartTitle := query.PromQLName
-		if chartTitle == "" {
-			chartTitle = fmt.Sprintf("查询 %d", i+1)
-		}
-
-		// 检查系列是否重复
-		if !seenSeries[chartTitle] {
-			seenSeries[chartTitle] = true
-			allDataPoints = append(allDataPoints, models.QueryDataPoints{
-				DataPoints: dataPoints,
-				ChartType:  chartType,
-				ChartTitle: chartTitle,
-			})
-			log.Printf("[TaskQueue] 添加新的数据系列: %s (包含 %d 个数据点)", chartTitle, len(dataPoints))
-		} else {
-			log.Printf("[TaskQueue] 跳过重复的数据系列: %s", chartTitle)
-		}
-	}
-
-	if len(allDataPoints) == 0 {
-		log.Printf("[TaskQueue] 未获取到任何数据点，任务终止")
-		return nil
-	}
-
-	log.Printf("[TaskQueue] 共收集到 %d 个唯一数据系列", len(allDataPoints))
-
-	// 发送到所有绑定的webhook
-	if len(webhooks) == 0 {
-		log.Printf("[TaskQueue] 任务没有配置webhook，跳过发送")
-	} else {
-		log.Printf("[TaskQueue] 准备发送到 %d 个webhook", len(webhooks))
-
-		// 记录已发送过的webhook，避免重复发送
+		// 发送文本卡片到所有 webhook
 		sentWebhooks := make(map[string]bool)
 		sentCount := 0
 		skippedCount := 0
 
 		for _, webhook := range webhooks {
-			// 跳过重复的webhook URL（单次任务内）
 			if sentWebhooks[webhook.URL] {
-				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s (任务内去重)", webhook.URL)
+				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s", webhook.URL)
+				skippedCount++
+				continue
+			}
+
+			log.Printf("[TaskQueue] 发送文本卡片到webhook (ID=%d)", webhook.ID)
+
+			webhookMutex := getWebhookMutex(webhook.ID)
+			webhookMutex.Lock()
+
+			err = service.SendFeishuTextCard(webhook.URL, promqlMetrics, promqlConfigs,
+				cardTitle, cardTemplate, buttonText, buttonURL)
+
+			if err != nil {
+				log.Printf("[TaskQueue] 发送失败: %v", err)
+				insertPushStatus(db, sourceID, webhook.ID, err)
+			} else {
+				sentCount++
+				log.Printf("[TaskQueue] 文本卡片发送成功")
+				insertPushStatus(db, sourceID, webhook.ID, nil)
+				sentWebhooks[webhook.URL] = true
+			}
+
+			webhookMutex.Unlock()
+		}
+
+		log.Printf("[TaskQueue] 任务完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
+			len(webhooks), sentCount, skippedCount)
+
+	} else {
+		// 图表模式：获取时间序列数据
+		log.Printf("[TaskQueue] 使用图表模式，获取时间序列数据")
+
+		var allDataPoints []models.QueryDataPoints
+		seenSeries := make(map[string]bool) // 用于系列去重
+
+		for i, query := range uniqueQueries {
+			// 获取图表类型
+			var chartType string
+			err = db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)
+			if err != nil {
+				log.Printf("[TaskQueue] 获取图表类型失败 (ID=%d): %v，使用默认类型 'area'", query.ChartTemplateID, err)
+				chartType = "area"
+			}
+
+			chartType = service.GetSupportedChartType(chartType)
+			log.Printf("[TaskQueue] 查询 %d: 使用图表类型 %s", i+1, chartType)
+
+			// 确定使用哪个标签
+			queryMetricLabel := query.MetricLabel
+			queryCustomLabel := query.CustomMetricLabel
+			if queryMetricLabel == "" {
+				queryMetricLabel = metricLabel
+			}
+
+			// 获取数据点
+			log.Printf("[TaskQueue] 开始获取查询 %d 的指标数据: %s (label=%s)", i+1, query.Query, queryMetricLabel)
+			dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, queryMetricLabel, queryCustomLabel)
+			if err != nil {
+				log.Printf("[TaskQueue] 获取指标数据失败: %v", err)
+				continue
+			}
+
+			// 生成图表标题
+			chartTitle := query.PromQLName
+			if chartTitle == "" {
+				chartTitle = fmt.Sprintf("查询 %d", i+1)
+			}
+
+			// 检查系列是否重复
+			if !seenSeries[chartTitle] {
+				seenSeries[chartTitle] = true
+				allDataPoints = append(allDataPoints, models.QueryDataPoints{
+					DataPoints: dataPoints,
+					ChartType:  chartType,
+					ChartTitle: chartTitle,
+				})
+				log.Printf("[TaskQueue] 添加新的数据系列: %s (包含 %d 个数据点)", chartTitle, len(dataPoints))
+			} else {
+				log.Printf("[TaskQueue] 跳过重复的数据系列: %s", chartTitle)
+			}
+		}
+
+		if len(allDataPoints) == 0 {
+			log.Printf("[TaskQueue] 未获取到任何数据点，任务终止")
+			return nil
+		}
+
+		log.Printf("[TaskQueue] 共收集到 %d 个唯一数据系列", len(allDataPoints))
+
+		// 发送到所有绑定的webhook
+		sentWebhooks := make(map[string]bool)
+		sentCount := 0
+		skippedCount := 0
+
+		for _, webhook := range webhooks {
+			if sentWebhooks[webhook.URL] {
+				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s", webhook.URL)
 				skippedCount++
 				continue
 			}
 
 			log.Printf("[TaskQueue] 准备发送到webhook (ID=%d)", webhook.ID)
 
-			// 添加webhook互斥锁，避免同时向同一webhook发送多个消息
 			webhookMutex := getWebhookMutex(webhook.ID)
 			webhookMutex.Lock()
 
+			// 使用每个查询的独立单位（如果有）
+			// 注意：图表模式下所有查询共用一个单位，这里使用第一个查询的单位或任务级别的单位
+			queryUnit := unit
+			if len(uniqueQueries) > 0 && uniqueQueries[0].Unit != "" {
+				queryUnit = uniqueQueries[0].Unit
+			}
+
 			err = service.SendFeishuStandardChart(webhook.URL, allDataPoints, cardTitle, cardTemplate,
-				unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
+				queryUnit, buttonText, buttonURL, showDataLabel.Int64 == 1)
 
 			if err != nil {
 				log.Printf("[TaskQueue] 发送失败: %v", err)
@@ -679,8 +793,6 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 				sentCount++
 				log.Printf("[TaskQueue] 发送成功: %d 个数据系列", len(allDataPoints))
 				insertPushStatus(db, sourceID, webhook.ID, nil)
-
-				// 标记此webhook URL已发送（仅在当前任务内去重）
 				sentWebhooks[webhook.URL] = true
 			}
 

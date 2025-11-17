@@ -124,6 +124,21 @@
       </div>
       
       <div class="form-group">
+        <label>推送模式:</label>
+        <div class="push-mode-selection">
+          <label>
+            <input type="radio" v-model="newTaskPushMode" value="chart" />
+            图表模式
+          </label>
+          <label>
+            <input type="radio" v-model="newTaskPushMode" value="text" />
+            文本模式
+          </label>
+        </div>
+        <small>图表模式：显示时间序列图表；文本模式：仅显示最新值</small>
+      </div>
+
+      <div class="form-group">
         <label>选择预定义 PromQL 查询 (必选):</label>
         <div class="promql-selection">
           <div v-if="promqls.length > 0">
@@ -153,6 +168,39 @@
                 <pre class="promql-query" v-html="highlightPromQL(promql.query)"></pre>
                 <div class="promql-description" v-if="promql.description">
                   {{ promql.description }}
+                </div>
+                
+                <!-- 为选中的 PromQL 添加配置面板 -->
+                <div v-if="selectedPromQLs.includes(promql.id.toString())" class="promql-config">
+                  <h5>PromQL 配置</h5>
+                  <div class="config-group">
+                    <label>单位:</label>
+                    <input 
+                      type="text" 
+                      v-model="promqlConfigs[promql.id].unit" 
+                      placeholder="例如: MB, GB, %, ms" 
+                    />
+                  </div>
+                  <div class="config-group">
+                    <label>指标标签:</label>
+                    <select v-model="promqlConfigs[promql.id].metric_label">
+                      <option value="pod">Pod 名称</option>
+                      <option value="namespace">命名空间</option>
+                      <option value="container">容器名称</option>
+                      <option value="instance">实例</option>
+                      <option value="job">任务名</option>
+                      <option value="node">节点名称</option>
+                      <option value="cluster">集群名称</option>
+                    </select>
+                  </div>
+                  <div class="config-group">
+                    <label>自定义指标标签:</label>
+                    <input 
+                      type="text" 
+                      v-model="promqlConfigs[promql.id].custom_metric_label" 
+                      placeholder="留空则使用上方标准标签" 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -515,6 +563,7 @@
             <th>ID</th>
             <th>名称</th>
             <th>数据源</th>
+            <th>推送模式</th>
             <th>时间范围</th>
             <th>发送时间</th>
             <th>查询/图表标签</th>
@@ -528,6 +577,11 @@
             <td>{{ task.id }}</td>
             <td>{{ task.name }}</td>
             <td>{{ getSourceName(task.source_id) }}</td>
+            <td>
+              <span :class="['push-mode-badge', task.push_mode || 'chart']">
+                {{ task.push_mode === 'text' ? '文本模式' : '图表模式' }}
+              </span>
+            </td>
             <td>{{ formatTimeRange(task.time_range) }}</td>
             <td>
                 <div class="send-times-list">
@@ -542,7 +596,14 @@
                 </div>
             </td>
             <td>
-              <div v-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
+              <div v-if="task.promql_configs && task.promql_configs.length > 0" class="promql-configs">
+                <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
+                  <span class="promql-name">{{ config.promql_name }}</span>
+                  <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
+                  <span v-if="config.metric_label" class="config-detail">(标签: {{ config.metric_label }})</span>
+                </div>
+              </div>
+              <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
                 <span v-for="(promqlId, index) in task.promql_ids" :key="promqlId" class="promql-tag">
                   {{ getPromqlName(promqlId) }}{{ index < task.promql_ids.length - 1 ? ', ' : '' }}
                 </span>
@@ -682,6 +743,28 @@ const selectedPromQLs = ref([])
 const newTaskButtonText = ref('')
 const newTaskButtonURL = ref('')
 const newTaskShowDataLabel = ref(false) // 添加新的配置项
+const newTaskPushMode = ref('chart') // 添加推送模式，默认为图表模式
+
+// 每个 PromQL 的独立配置
+const promqlConfigs = ref<Record<number, {
+  unit: string
+  metric_label: string
+  custom_metric_label: string
+}>>({})
+
+// 监听 selectedPromQLs 的变化，自动初始化配置
+watch(selectedPromQLs, (newVal) => {
+  newVal.forEach(id => {
+    const numId = parseInt(id)
+    if (!promqlConfigs.value[numId]) {
+      promqlConfigs.value[numId] = {
+        unit: newTaskUnit.value || '',
+        metric_label: newTaskMetricLabel.value || 'pod',
+        custom_metric_label: ''
+      }
+    }
+  })
+})
 
 // 发送时间相关的数据和方法
 const taskSendTimes = ref([
@@ -1797,11 +1880,29 @@ async function addPushTask() {
       return
     }
 
+    // 构建 PromQL 配置列表
+    const promqlConfigsList = selectedPromQLs.value.map(id => {
+      const numId = parseInt(id)
+      const config = promqlConfigs.value[numId] || {
+        unit: '',
+        metric_label: 'pod',
+        custom_metric_label: ''
+      }
+      return {
+        promql_id: numId,
+        unit: config.unit,
+        metric_label: config.metric_label,
+        custom_metric_label: config.custom_metric_label,
+        chart_template_id: parseInt(newTaskChartTemplateId.value) || null
+      }
+    })
+
     // 构建请求数据
     const payload = {
       name: newTaskName.value,
       source_id: parseInt(newTaskSourceId.value),
       promql_ids: selectedPromQLs.value.map(id => parseInt(id)),
+      promql_configs: promqlConfigsList, // 新增：每个 PromQL 的独立配置
       query: selectedPromQLs.value.map(id => {
         const promql = promqls.value.find(p => p.id.toString() === id)
         return promql ? promql.query : ''
@@ -1818,6 +1919,7 @@ async function addPushTask() {
       button_text: newTaskButtonText.value,
       button_url: newTaskButtonURL.value,
       show_data_label: newTaskShowDataLabel.value,
+      push_mode: newTaskPushMode.value, // 新增：推送模式
       enabled: 1,
       send_times: newTaskSendTimes.value.map(time => ({
         weekday: parseInt(time.weekday),
@@ -1896,6 +1998,8 @@ async function addPushTask() {
     newTaskMetricLabel.value = 'pod'
     newTaskCustomMetricLabel.value = ''
     newTaskUnit.value = ''
+    newTaskPushMode.value = 'chart' // 重置推送模式
+    promqlConfigs.value = {} // 重置 PromQL 配置
     newTaskWebhookIds.value = []
     selectedPromQLs.value = []
     newTaskButtonText.value = ''
