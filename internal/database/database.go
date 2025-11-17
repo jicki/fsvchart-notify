@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 11 // 版本11: 添加 initial_unit 字段支持单位自动转换
+const CurrentSchemaVersion = 12 // 版本12: 添加 display_order 字段支持自定义显示顺序
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {
@@ -50,6 +50,7 @@ var currentStructures = map[string]TableStructure{
 			"metric_label":        "TEXT",
 			"custom_metric_label": "TEXT",
 			"initial_unit":        "TEXT",
+			"display_order":       "INTEGER",
 		},
 	},
 	// 其他表可以按需添加...
@@ -287,6 +288,19 @@ var migrations = []Migration{
 		-- 用于存储原始单位，系统会自动转换为目标单位
 		-- 支持: bytes (B/KB/MB/GB/TB/PB), time (ns/μs/ms/s/m/h), ms 等
 		ALTER TABLE push_task_promql ADD COLUMN initial_unit TEXT DEFAULT '';
+		`,
+	},
+	{
+		Version:     12,
+		Description: "添加 display_order 字段支持自定义显示顺序",
+		SQL: `
+		-- 为 push_task_promql 表添加 display_order 字段
+		-- 用于控制 PromQL 在卡片中的显示顺序
+		-- 默认值为 0，数字越小越靠前
+		ALTER TABLE push_task_promql ADD COLUMN display_order INTEGER DEFAULT 0;
+		
+		-- 为现有记录设置默认顺序（按 id 升序）
+		UPDATE push_task_promql SET display_order = id WHERE display_order = 0;
 		`,
 	},
 }

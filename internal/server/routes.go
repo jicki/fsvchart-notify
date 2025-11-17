@@ -260,6 +260,7 @@ type PromQLConfig struct {
 	CustomMetricLabel string `json:"custom_metric_label"`
 	ChartTemplateID   int64  `json:"chart_template_id"` // 每个PromQL可以有自己的图表模板
 	InitialUnit       string `json:"initial_unit"`      // 初始单位，用于自动单位转换
+	DisplayOrder      int    `json:"display_order"`     // 显示顺序，数字越小越靠前
 }
 
 type PushTaskReq struct {
@@ -468,39 +469,42 @@ func getAllPushTasks(c *gin.Context) {
 	// 获取关联的PromQL IDs和每个PromQL的独立配置
 	promqlRows, err := db.Query(`
 		SELECT ptp.promql_id, ptp.chart_template_id, 
-		       ptp.unit, ptp.metric_label, ptp.custom_metric_label, ptp.initial_unit,
+		       ptp.unit, ptp.metric_label, ptp.custom_metric_label, ptp.initial_unit, ptp.display_order,
 		       p.name as promql_name
 		FROM push_task_promql ptp
 		LEFT JOIN promql p ON ptp.promql_id = p.id
 		WHERE ptp.task_id = ?
+		ORDER BY ptp.display_order ASC, ptp.id ASC
 	`, task.ID)
 	if err != nil {
 		log.Printf("查询任务关联的PromQL失败: %v", err)
 	} else {
 		var promqlIDs []int64
 		var promqlConfigs []map[string]interface{}
-		// 使用第一个找到的chart_template_id
-		var foundChartTemplateID int64
-		for promqlRows.Next() {
-			var promqlID int64
-			var chartTemplateID sql.NullInt64
-			var unit, metricLabel, customMetricLabel, initialUnit, promqlName string
-			if err := promqlRows.Scan(&promqlID, &chartTemplateID, 
-				&unit, &metricLabel, &customMetricLabel, &initialUnit, &promqlName); err != nil {
-				log.Printf("扫描PromQL数据失败: %v", err)
-				continue
-			}
-			promqlIDs = append(promqlIDs, promqlID)
-			
-			// 构建 PromQL 配置对象
-			promqlConfig := map[string]interface{}{
-				"promql_id":           promqlID,
-				"promql_name":         promqlName,
-				"unit":                unit,
-				"metric_label":        metricLabel,
-				"custom_metric_label": customMetricLabel,
-				"initial_unit":        initialUnit,
-			}
+	// 使用第一个找到的chart_template_id
+	var foundChartTemplateID int64
+	for promqlRows.Next() {
+		var promqlID int64
+		var chartTemplateID sql.NullInt64
+		var displayOrder int
+		var unit, metricLabel, customMetricLabel, initialUnit, promqlName string
+		if err := promqlRows.Scan(&promqlID, &chartTemplateID, 
+			&unit, &metricLabel, &customMetricLabel, &initialUnit, &displayOrder, &promqlName); err != nil {
+			log.Printf("扫描PromQL数据失败: %v", err)
+			continue
+		}
+		promqlIDs = append(promqlIDs, promqlID)
+		
+		// 构建 PromQL 配置对象
+		promqlConfig := map[string]interface{}{
+			"promql_id":           promqlID,
+			"promql_name":         promqlName,
+			"unit":                unit,
+			"metric_label":        metricLabel,
+			"custom_metric_label": customMetricLabel,
+			"initial_unit":        initialUnit,
+			"display_order":       displayOrder,
+		}
 				if chartTemplateID.Valid {
 					promqlConfig["chart_template_id"] = chartTemplateID.Int64
 					if foundChartTemplateID == 0 {
@@ -757,13 +761,13 @@ func createPushTask(c *gin.Context) {
 				chartTemplateID = req.ChartTemplateID // 如果没有配置，使用任务级别的
 			}
 
-		_, err = tx.Exec(`
-			INSERT INTO push_task_promql (
-				task_id, promql_id, chart_template_id, 
-				unit, metric_label, custom_metric_label, initial_unit
-			) VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, taskID, config.PromQLID, chartTemplateID, 
-			unit, metricLabel, customMetricLabel, config.InitialUnit)
+	_, err = tx.Exec(`
+		INSERT INTO push_task_promql (
+			task_id, promql_id, chart_template_id, 
+			unit, metric_label, custom_metric_label, initial_unit, display_order
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, taskID, config.PromQLID, chartTemplateID, 
+		unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder)
 			if err != nil {
 				log.Printf("[createPushTask] Failed to insert push_task_promql with config: %v", err)
 				// 继续处理其他 PromQL，不中断
@@ -776,13 +780,13 @@ func createPushTask(c *gin.Context) {
 			if metricLabel == "" {
 				metricLabel = "pod"
 			}
-		_, err = tx.Exec(`
-			INSERT INTO push_task_promql (
-				task_id, promql_id, chart_template_id, 
-				unit, metric_label, custom_metric_label, initial_unit
-			) VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, taskID, promqlID, req.ChartTemplateID,
-			req.Unit, metricLabel, req.CustomMetricLabel, "")
+	_, err = tx.Exec(`
+		INSERT INTO push_task_promql (
+			task_id, promql_id, chart_template_id, 
+			unit, metric_label, custom_metric_label, initial_unit, display_order
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, taskID, promqlID, req.ChartTemplateID,
+		req.Unit, metricLabel, req.CustomMetricLabel, "", 0)
 			if err != nil {
 				log.Printf("[createPushTask] Failed to insert push_task_promql: %v", err)
 				// 继续处理其他 PromQL，不中断
@@ -1042,13 +1046,13 @@ func updatePushTask(c *gin.Context) {
 					chartTemplateID = req.ChartTemplateID
 				}
 
-			_, err = tx.Exec(`
-				INSERT INTO push_task_promql (
-					task_id, promql_id, chart_template_id, 
-					unit, metric_label, custom_metric_label, initial_unit
-				) VALUES (?, ?, ?, ?, ?, ?, ?)
-			`, id, config.PromQLID, chartTemplateID,
-				unit, metricLabel, customMetricLabel, config.InitialUnit)
+		_, err = tx.Exec(`
+			INSERT INTO push_task_promql (
+				task_id, promql_id, chart_template_id, 
+				unit, metric_label, custom_metric_label, initial_unit, display_order
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, id, config.PromQLID, chartTemplateID,
+			unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder)
 				if err != nil {
 					log.Printf("[updatePushTask] 插入新的PromQL关联失败: promql_id=%d, error=%v", config.PromQLID, err)
 				}
@@ -1061,13 +1065,13 @@ func updatePushTask(c *gin.Context) {
 				if metricLabel == "" {
 					metricLabel = "pod"
 				}
-			_, err = tx.Exec(`
-				INSERT INTO push_task_promql (
-					task_id, promql_id, chart_template_id, 
-					unit, metric_label, custom_metric_label, initial_unit
-				) VALUES (?, ?, ?, ?, ?, ?, ?)
-			`, id, promqlID, req.ChartTemplateID,
-				req.Unit, metricLabel, req.CustomMetricLabel, "")
+		_, err = tx.Exec(`
+			INSERT INTO push_task_promql (
+				task_id, promql_id, chart_template_id, 
+				unit, metric_label, custom_metric_label, initial_unit, display_order
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, id, promqlID, req.ChartTemplateID,
+			req.Unit, metricLabel, req.CustomMetricLabel, "", 0)
 				if err != nil {
 					log.Printf("[updatePushTask] 插入新的PromQL关联失败: promql_id=%d, error=%v", promqlID, err)
 				}

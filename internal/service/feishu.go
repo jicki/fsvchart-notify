@@ -120,10 +120,11 @@ type FeishuChartSpec struct {
 
 // FeishuAction 代表 "action" 元素中的按钮或选择等交互组件
 type FeishuAction struct {
-	Tag   string            `json:"tag"` // 一般 "button"
+	Tag   string            `json:"tag"`             // 一般 "button"
 	Text  *FeishuActionText `json:"text,omitempty"`
 	Type  string            `json:"type,omitempty"`  // "primary", "default", ...
-	Value map[string]string `json:"value,omitempty"` // 自定义键值对
+	URL   string            `json:"url,omitempty"`   // 跳转链接
+	Value map[string]string `json:"value,omitempty"` // 自定义键值对（已废弃）
 }
 
 // FeishuActionText 代表按钮上的文字
@@ -1493,9 +1494,10 @@ func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetr
 	MetricLabel       string
 	CustomMetricLabel string
 	InitialUnit       string
-}, cardTitle, cardTemplate, buttonText, buttonURL string) error {
+}, promqlOrder []string, cardTitle, cardTemplate, buttonText, buttonURL string) error {
 	log.Printf("[SendFeishuTextCard] ====== START ======")
 	log.Printf("[SendFeishuTextCard] Webhook: %s, CardTitle: %s", webhookURL, cardTitle)
+	log.Printf("[SendFeishuTextCard] PromQL 显示顺序: %v", promqlOrder)
 
 	// 构建卡片
 	card := &FeishuCard{
@@ -1516,8 +1518,13 @@ func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetr
 		},
 	}
 
-	// 为每个 PromQL 添加一个部分
-	for promqlName, metrics := range promqlMetrics {
+	// 按照指定的顺序为每个 PromQL 添加一个部分
+	for _, promqlName := range promqlOrder {
+		metrics, exists := promqlMetrics[promqlName]
+		if !exists {
+			log.Printf("[SendFeishuTextCard] Warning: PromQL '%s' not found in metrics", promqlName)
+			continue
+		}
 		config, hasConfig := promqlConfigs[promqlName]
 		if !hasConfig {
 			log.Printf("[SendFeishuTextCard] Warning: No config found for PromQL '%s'", promqlName)
@@ -1568,18 +1575,11 @@ func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetr
 				})
 			}
 		}
-
-		// 添加分隔线（除了最后一个）
-		// 我们需要先收集所有 PromQL，然后判断是否是最后一个
-		// 暂时先不添加分隔线，因为 map 的遍历是无序的
 	}
 
-	// 添加数据采集时间
-	now := time.Now().In(ChinaTimezone)
-	timeText := fmt.Sprintf("⏰ 数据时间: %s", now.Format("2006-01-02 15:04"))
+	// 添加分割线
 	card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
-		Tag:     "markdown",
-		Content: timeText,
+		Tag: "hr",
 	})
 
 	// 添加按钮（如果提供）
@@ -1594,13 +1594,19 @@ func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetr
 						Tag:     "plain_text",
 					},
 					Type: "default",
-					Value: map[string]string{
-						"url": buttonURL,
-					},
+					URL:  buttonURL,
 				},
 			},
 		})
 	}
+
+	// 添加数据采集时间
+	now := time.Now().In(ChinaTimezone)
+	timeText := fmt.Sprintf("⏰ 数据时间: %s", now.Format("2006-01-02 15:04"))
+	card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+		Tag:     "markdown",
+		Content: timeText,
+	})
 
 	// 发送消息
 	err := SendFeishuCardMessage(webhookURL, card)

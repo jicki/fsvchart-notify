@@ -437,18 +437,21 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		MetricLabel       string
 		CustomMetricLabel string
 		InitialUnit       string
+		DisplayOrder      int
 	}
 
-	// 查询任务的所有查询及其独立配置
+	// 查询任务的所有查询及其独立配置（按 display_order 排序）
 	rows, err := db.Query(`
 		SELECT ptp.promql_id, p.query, ptp.chart_template_id, p.name,
 		       COALESCE(ptp.unit, '') as unit,
 		       COALESCE(ptp.metric_label, 'pod') as metric_label,
 		       COALESCE(ptp.custom_metric_label, '') as custom_metric_label,
-		       COALESCE(ptp.initial_unit, '') as initial_unit
+		       COALESCE(ptp.initial_unit, '') as initial_unit,
+		       COALESCE(ptp.display_order, 0) as display_order
 		FROM push_task_promql ptp
 		JOIN promql p ON ptp.promql_id = p.id
 		WHERE ptp.task_id = ?
+		ORDER BY ptp.display_order ASC, ptp.id ASC
 	`, taskID)
 	if err != nil {
 		log.Printf("[TaskQueue] 查询PromQL失败: %v", err)
@@ -467,9 +470,10 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			MetricLabel       string
 			CustomMetricLabel string
 			InitialUnit       string
+			DisplayOrder      int
 		}
 		if err := rows.Scan(&promqlID, &q.Query, &q.ChartTemplateID, &q.PromQLName,
-			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel, &q.InitialUnit); err != nil {
+			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel, &q.InitialUnit, &q.DisplayOrder); err != nil {
 			log.Printf("[TaskQueue] 扫描PromQL行失败: %v", err)
 			continue
 		}
@@ -478,7 +482,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		if !seenQueries[q.Query] {
 			seenQueries[q.Query] = true
 			uniqueQueries = append(uniqueQueries, q)
-			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s, initial_unit=%s)", q.Query, q.Unit, q.MetricLabel, q.InitialUnit)
+			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s, initial_unit=%s, order=%d)", q.Query, q.Unit, q.MetricLabel, q.InitialUnit, q.DisplayOrder)
 		} else {
 			log.Printf("[TaskQueue] 跳过重复查询: %s", q.Query)
 		}
@@ -505,6 +509,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 					MetricLabel       string
 					CustomMetricLabel string
 					InitialUnit       string
+					DisplayOrder      int
 				}
 				if err := queryRows.Scan(&q.Query, &q.ChartTemplateID); err != nil {
 					log.Printf("[TaskQueue] 扫描查询行失败: %v", err)
@@ -515,7 +520,8 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				q.Unit = unit
 				q.MetricLabel = metricLabel
 				q.CustomMetricLabel = customMetricLabel
-				q.InitialUnit = "" // 旧格式没有 initial_unit
+				q.InitialUnit = ""  // 旧格式没有 initial_unit
+				q.DisplayOrder = 0  // 旧格式没有 display_order
 
 				// 使用查询内容作为去重键
 				if !seenQueries[q.Query] {
@@ -536,23 +542,25 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				WHERE id = ?
 			`, taskID).Scan(&query, &chartTemplateID)
 
-			if err == nil && query != "" && !seenQueries[query] {
-				uniqueQueries = append(uniqueQueries, struct {
-					Query             string
-					ChartTemplateID   int64
-					PromQLName        string
-					Unit              string
-					MetricLabel       string
-					CustomMetricLabel string
-					InitialUnit       string
-				}{
-					Query:             query,
-					ChartTemplateID:   chartTemplateID,
-					PromQLName:        "",
-					Unit:              unit,
-					MetricLabel:       metricLabel,
-					CustomMetricLabel: customMetricLabel,
-					InitialUnit:       "", // 旧格式没有 initial_unit
+		if err == nil && query != "" && !seenQueries[query] {
+			uniqueQueries = append(uniqueQueries, struct {
+				Query             string
+				ChartTemplateID   int64
+				PromQLName        string
+				Unit              string
+				MetricLabel       string
+				CustomMetricLabel string
+				InitialUnit       string
+				DisplayOrder      int
+			}{
+				Query:             query,
+				ChartTemplateID:   chartTemplateID,
+				PromQLName:        "",
+				Unit:              unit,
+				MetricLabel:       metricLabel,
+				CustomMetricLabel: customMetricLabel,
+				InitialUnit:       "", // 旧格式没有 initial_unit
+				DisplayOrder:      0,  // 旧格式没有 display_order
 				})
 				log.Printf("[TaskQueue] 添加任务表中的查询: %s", query)
 			}
@@ -625,6 +633,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		CustomMetricLabel string
 		InitialUnit       string
 	})
+	var promqlOrder []string // 保持 PromQL 的显示顺序
 
 	for i, query := range uniqueQueries {
 		log.Printf("[TaskQueue] 获取查询 %d 的最新指标值: %s", i+1, query.Query)
@@ -662,6 +671,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			CustomMetricLabel: queryCustomLabel,
 			InitialUnit:       query.InitialUnit,
 		}
+		promqlOrder = append(promqlOrder, promqlName) // 记录顺序
 
 		log.Printf("[TaskQueue] PromQL '%s' 获取到 %d 个最新指标", promqlName, len(latestMetrics))
 	}
@@ -683,13 +693,13 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				continue
 			}
 
-			log.Printf("[TaskQueue] 发送文本卡片到webhook (ID=%d)", webhook.ID)
+		log.Printf("[TaskQueue] 发送文本卡片到webhook (ID=%d)", webhook.ID)
 
-			webhookMutex := getWebhookMutex(webhook.ID)
-			webhookMutex.Lock()
+		webhookMutex := getWebhookMutex(webhook.ID)
+		webhookMutex.Lock()
 
-			err = service.SendFeishuTextCard(webhook.URL, promqlMetrics, promqlConfigs,
-				cardTitle, cardTemplate, buttonText, buttonURL)
+		err = service.SendFeishuTextCard(webhook.URL, promqlMetrics, promqlConfigs, promqlOrder,
+			cardTitle, cardTemplate, buttonText, buttonURL)
 
 			if err != nil {
 				log.Printf("[TaskQueue] 发送失败: %v", err)

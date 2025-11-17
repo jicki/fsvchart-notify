@@ -170,18 +170,29 @@
                   {{ promql.description }}
                 </div>
                 
-              <!-- 为选中的 PromQL 添加配置面板 -->
-              <div v-if="selectedPromQLs.includes(promql.id.toString())" class="promql-config">
-                <h5>PromQL 配置</h5>
-              <div class="config-group">
-                <label>初始单位 (可选):</label>
-                <input 
-                  type="text" 
-                  v-model="promqlConfigs[promql.id].initial_unit" 
-                  placeholder="例如: bytes, ms, s (留空则不转换)" 
-                />
-                <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
-              </div>
+            <!-- 为选中的 PromQL 添加配置面板 -->
+            <div v-if="selectedPromQLs.includes(promql.id.toString())" class="promql-config">
+              <h5>PromQL 配置</h5>
+            <div class="config-group">
+              <label>显示顺序:</label>
+              <input 
+                type="number" 
+                v-model.number="promqlConfigs[promql.id].display_order" 
+                placeholder="数字越小越靠前" 
+                min="0"
+                step="1"
+              />
+              <small style="color: #666;">控制在卡片中的显示顺序，数字越小越靠前（默认为0）</small>
+            </div>
+            <div class="config-group">
+              <label>初始单位 (可选):</label>
+              <input 
+                type="text" 
+                v-model="promqlConfigs[promql.id].initial_unit" 
+                placeholder="例如: bytes, ms, s (留空则不转换)" 
+              />
+              <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
+            </div>
               <div class="config-group">
                 <label>单位:</label>
                 <input 
@@ -407,18 +418,29 @@
                   {{ promql.description }}
                 </div>
                 
-              <!-- 为选中的 PromQL 添加配置面板 -->
-              <div v-if="editSelectedPromQLs.includes(promql.id.toString())" class="promql-config">
-                <h5>PromQL 配置</h5>
-              <div class="config-group">
-                <label>初始单位 (可选):</label>
-                <input 
-                  type="text" 
-                  v-model="editPromqlConfigs[promql.id].initial_unit" 
-                  placeholder="例如: bytes, ms, s (留空则不转换)" 
-                />
-                <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
-              </div>
+            <!-- 为选中的 PromQL 添加配置面板 -->
+            <div v-if="editSelectedPromQLs.includes(promql.id.toString())" class="promql-config">
+              <h5>PromQL 配置</h5>
+            <div class="config-group">
+              <label>显示顺序:</label>
+              <input 
+                type="number" 
+                v-model.number="editPromqlConfigs[promql.id].display_order" 
+                placeholder="数字越小越靠前" 
+                min="0"
+                step="1"
+              />
+              <small style="color: #666;">控制在卡片中的显示顺序，数字越小越靠前（默认为0）</small>
+            </div>
+            <div class="config-group">
+              <label>初始单位 (可选):</label>
+              <input 
+                type="text" 
+                v-model="editPromqlConfigs[promql.id].initial_unit" 
+                placeholder="例如: bytes, ms, s (留空则不转换)" 
+              />
+              <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
+            </div>
               <div class="config-group">
                 <label>单位:</label>
                 <input 
@@ -627,14 +649,15 @@
             </td>
             <td>
             <div v-if="task.promql_configs && task.promql_configs.length > 0" class="promql-configs">
-              <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
-                <span class="promql-name">{{ config.promql_name }}</span>
-                <span v-if="config.initial_unit" class="config-detail">(初始单位: {{ config.initial_unit }})</span>
-                <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
-                <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
-                  (标签: {{ config.custom_metric_label || config.metric_label }})
-                </span>
-              </div>
+            <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
+              <span class="promql-name">{{ config.promql_name }}</span>
+              <span v-if="config.display_order !== undefined && config.display_order !== 0" class="config-detail" style="color: #409eff;">(顺序: {{ config.display_order }})</span>
+              <span v-if="config.initial_unit" class="config-detail">(初始单位: {{ config.initial_unit }})</span>
+              <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
+              <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
+                (标签: {{ config.custom_metric_label || config.metric_label }})
+              </span>
+            </div>
             </div>
               <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
                 <span v-for="(promqlId, index) in task.promql_ids" :key="promqlId" class="promql-tag">
@@ -827,7 +850,8 @@ watch(selectedPromQLs, (newVal, oldVal) => {
       unit: newTaskUnit.value || '',
       metric_label: newTaskMetricLabel.value || 'pod',
       custom_metric_label: '',
-      initial_unit: ''
+      initial_unit: '',
+      display_order: 0
     }
   }
     
@@ -864,7 +888,8 @@ watch(editSelectedPromQLs, (newVal, oldVal) => {
         unit: editTaskUnit.value || '',
         metric_label: editTaskMetricLabel.value || 'pod',
         custom_metric_label: editTaskCustomMetricLabel.value || '',
-        initial_unit: ''
+        initial_unit: '',
+        display_order: 0
       }
     }
     
@@ -1711,13 +1736,14 @@ async function updateTask() {
     console.log('[任务更新] 原时间范围:', oldTask?.time_range || '无')
     
     // 构建 PromQL 配置列表
-    const promqlConfigsList = editSelectedPromQLs.value.map(id => {
-      const numId = parseInt(id)
+  const promqlConfigsList = editSelectedPromQLs.value.map(id => {
+    const numId = parseInt(id)
     const config = editPromqlConfigs.value[numId] || {
       unit: '',
       metric_label: 'pod',
       custom_metric_label: '',
-      initial_unit: ''
+      initial_unit: '',
+      display_order: 0
     }
     return {
       promql_id: numId,
@@ -1725,9 +1751,10 @@ async function updateTask() {
       metric_label: config.metric_label,
       custom_metric_label: config.custom_metric_label,
       initial_unit: config.initial_unit,
+      display_order: config.display_order,
       chart_template_id: parseInt(editTaskChartTemplateId.value) || null
     }
-    })
+  })
     
     console.log('[任务更新] PromQL 配置列表:', promqlConfigsList)
     
@@ -1971,12 +1998,13 @@ function editTask(task) {
   if (task.promql_configs && task.promql_configs.length > 0) {
     // 从 promql_configs 加载配置
     task.promql_configs.forEach(config => {
-    editPromqlConfigs.value[config.promql_id] = {
-      unit: config.unit || '',
-      metric_label: config.metric_label || 'pod',
-      custom_metric_label: config.custom_metric_label || '',
-      initial_unit: config.initial_unit || ''
-    }
+  editPromqlConfigs.value[config.promql_id] = {
+    unit: config.unit || '',
+    metric_label: config.metric_label || 'pod',
+    custom_metric_label: config.custom_metric_label || '',
+    initial_unit: config.initial_unit || '',
+    display_order: config.display_order || 0
+  }
     })
     console.log('[编辑任务] 加载 PromQL 配置:', editPromqlConfigs.value)
   } else if (task.promql_ids && task.promql_ids.length > 0) {
@@ -1986,7 +2014,8 @@ function editTask(task) {
         unit: task.unit || '',
         metric_label: task.metric_label || 'pod',
         custom_metric_label: task.custom_metric_label || '',
-        initial_unit: ''
+        initial_unit: '',
+        display_order: 0
       }
     })
     console.log('[编辑任务] 使用任务级别配置初始化 PromQL:', editPromqlConfigs.value)
@@ -2045,7 +2074,8 @@ async function addPushTask() {
       unit: '',
       metric_label: 'pod',
       custom_metric_label: '',
-      initial_unit: ''
+      initial_unit: '',
+      display_order: 0
     }
     return {
       promql_id: numId,
@@ -2053,6 +2083,7 @@ async function addPushTask() {
       metric_label: config.metric_label,
       custom_metric_label: config.custom_metric_label,
       initial_unit: config.initial_unit,
+      display_order: config.display_order,
       chart_template_id: parseInt(newTaskChartTemplateId.value) || null
     }
   })
