@@ -1568,19 +1568,20 @@ func runSingleTaskPush(db *sql.DB, taskID int64) {
 
 		log.Printf("[runSingleTaskPush] Fetched %d data points for query %d", len(dataPoints), i+1)
 
-		// 添加到结果集
-		chartTitle := query.PromQLName
-		if chartTitle == "" {
-			// 如果PromQL名称为空，使用默认的"查询 N"
-			chartTitle = fmt.Sprintf("查询 %d", i+1)
-		}
-
-		allDataPoints = append(allDataPoints, models.QueryDataPoints{
-			DataPoints: dataPoints,
-			ChartType:  chartType,
-			ChartTitle: chartTitle,
-		})
+	// 添加到结果集
+	chartTitle := query.PromQLName
+	if chartTitle == "" {
+		// 如果PromQL名称为空，使用默认的"查询 N"
+		chartTitle = fmt.Sprintf("查询 %d", i+1)
 	}
+
+	allDataPoints = append(allDataPoints, models.QueryDataPoints{
+		DataPoints: dataPoints,
+		ChartType:  chartType,
+		ChartTitle: chartTitle,
+		Unit:       query.Unit, // 使用每个查询的独立单位
+	})
+}
 
 	// 如果没有获取到任何数据点，记录错误并返回
 	if len(allDataPoints) == 0 {

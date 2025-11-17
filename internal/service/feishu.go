@@ -1074,24 +1074,32 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 				"values": chartPoints,
 			})
 
-			// 添加系列配置 - 只使用飞书支持的类型
-			chartSeries = append(chartSeries, map[string]interface{}{
-				"type":      GetSupportedChartType(queryData.ChartType), // 使用queryData的图表类型，确保受飞书支持
-				"stack":     false,                                      // 设置stack为false，禁用堆叠效果
-				"dataIndex": i,
-				// 添加数据标签配置，显示单位
-				"label": map[string]interface{}{
-					"visible": showDataLabel, // 使用传入的 showDataLabel 参数
-					"formatter": func() string {
-						if unit == "%" {
-							return "{y}%"
-						} else if unit != "" {
-							return "{y}" + unit
-						}
-						return "{y}"
-					}(),
-				},
-				"seriesField": "name",
+		// 确定使用的单位：优先使用该查询的独立单位，否则使用任务级别的单位
+		currentUnit := queryData.Unit
+		if currentUnit == "" {
+			currentUnit = unit
+		}
+		log.Printf("[SendFeishuStandardChart] 系列 '%s' 使用单位: '%s' (queryData.Unit='%s', task.unit='%s')",
+			queryData.ChartTitle, currentUnit, queryData.Unit, unit)
+
+		// 添加系列配置 - 只使用飞书支持的类型
+		chartSeries = append(chartSeries, map[string]interface{}{
+			"type":      GetSupportedChartType(queryData.ChartType), // 使用queryData的图表类型，确保受飞书支持
+			"stack":     false,                                      // 设置stack为false，禁用堆叠效果
+			"dataIndex": i,
+			// 添加数据标签配置，显示单位
+			"label": map[string]interface{}{
+				"visible": showDataLabel, // 使用传入的 showDataLabel 参数
+				"formatter": func() string {
+					if currentUnit == "%" {
+						return "{y}%"
+					} else if currentUnit != "" {
+						return "{y}" + currentUnit
+					}
+					return "{y}"
+				}(),
+			},
+			"seriesField": "name",
 				"xField": func() interface{} {
 					if GetSupportedChartType(queryData.ChartType) == "bar" {
 						return []string{"x", "name"}
@@ -1180,57 +1188,69 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 							"alignTick": true,
 						},
 					},
-					{
-						"orient": "left",
-						// 添加y轴标签配置，显示单位
-						"label": map[string]interface{}{
-							"visible": true,
-							"formatter": func() string {
-								if unit == "%" {
-									return "{label}%"
-								} else if unit != "" {
-									return "{label}" + unit
-								}
-								return "{label}"
-							}(),
-						},
+				{
+					"orient": "left",
+					// 添加y轴标签配置，显示该查询的独立单位
+					"label": map[string]interface{}{
+						"visible": true,
+						"formatter": func() string {
+							currentYUnit := queryData.Unit
+							if currentYUnit == "" {
+								currentYUnit = unit // 向后兼容：如果没有设置独立单位，使用任务级别的单位
+							}
+							if currentYUnit == "%" {
+								return "{label}%"
+							} else if currentYUnit != "" {
+								return "{label}" + currentYUnit
+							}
+							return "{label}"
+						}(),
 					},
+				},
 				},
 				// 图例配置
 				"legends": map[string]interface{}{
 					"position": "bottom",
 				},
-				// 添加与飞书要求匹配的tooltip配置
-				"tooltip": map[string]interface{}{
-					"mark": map[string]interface{}{
-						"content": []map[string]interface{}{
-							{
-								"valueFormatter": func() string {
-									if unit == "%" {
-										return "{name}: {y}%"
-									} else if unit != "" {
-										return "{name}: {y}" + unit
-									}
-									return "{name}: {y}"
-								}(),
-							},
-						},
-					},
-					"dimension": map[string]interface{}{
-						"content": []map[string]interface{}{
-							{
-								"valueFormatter": func() string {
-									if unit == "%" {
-										return "{name}: {y}%"
-									} else if unit != "" {
-										return "{name}: {y}" + unit
-									}
-									return "{name}: {y}"
-								}(),
-							},
+			// 添加与飞书要求匹配的tooltip配置，使用该查询的独立单位
+			"tooltip": map[string]interface{}{
+				"mark": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"valueFormatter": func() string {
+								tooltipUnit := queryData.Unit
+								if tooltipUnit == "" {
+									tooltipUnit = unit // 向后兼容
+								}
+								if tooltipUnit == "%" {
+									return "{name}: {y}%"
+								} else if tooltipUnit != "" {
+									return "{name}: {y}" + tooltipUnit
+								}
+								return "{name}: {y}"
+							}(),
 						},
 					},
 				},
+				"dimension": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"valueFormatter": func() string {
+								tooltipUnit := queryData.Unit
+								if tooltipUnit == "" {
+									tooltipUnit = unit // 向后兼容
+								}
+								if tooltipUnit == "%" {
+									return "{name}: {y}%"
+								} else if tooltipUnit != "" {
+									return "{name}: {y}" + tooltipUnit
+								}
+								return "{name}: {y}"
+							}(),
+						},
+					},
+				},
+			},
 			},
 		}
 

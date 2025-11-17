@@ -757,18 +757,19 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				chartTitle = fmt.Sprintf("查询 %d", i+1)
 			}
 
-			// 检查系列是否重复
-			if !seenSeries[chartTitle] {
-				seenSeries[chartTitle] = true
-				allDataPoints = append(allDataPoints, models.QueryDataPoints{
-					DataPoints: dataPoints,
-					ChartType:  chartType,
-					ChartTitle: chartTitle,
-				})
-				log.Printf("[TaskQueue] 添加新的数据系列: %s (包含 %d 个数据点)", chartTitle, len(dataPoints))
-			} else {
-				log.Printf("[TaskQueue] 跳过重复的数据系列: %s", chartTitle)
-			}
+		// 检查系列是否重复
+		if !seenSeries[chartTitle] {
+			seenSeries[chartTitle] = true
+			allDataPoints = append(allDataPoints, models.QueryDataPoints{
+				DataPoints: dataPoints,
+				ChartType:  chartType,
+				ChartTitle: chartTitle,
+				Unit:       query.Unit, // 使用每个查询的独立单位
+			})
+			log.Printf("[TaskQueue] 添加新的数据系列: %s (包含 %d 个数据点, 单位: %s)", chartTitle, len(dataPoints), query.Unit)
+		} else {
+			log.Printf("[TaskQueue] 跳过重复的数据系列: %s", chartTitle)
+		}
 		}
 
 		if len(allDataPoints) == 0 {
@@ -792,18 +793,13 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 
 			log.Printf("[TaskQueue] 准备发送到webhook (ID=%d)", webhook.ID)
 
-			webhookMutex := getWebhookMutex(webhook.ID)
-			webhookMutex.Lock()
+		webhookMutex := getWebhookMutex(webhook.ID)
+		webhookMutex.Lock()
 
-			// 使用每个查询的独立单位（如果有）
-			// 注意：图表模式下所有查询共用一个单位，这里使用第一个查询的单位或任务级别的单位
-			queryUnit := unit
-			if len(uniqueQueries) > 0 && uniqueQueries[0].Unit != "" {
-				queryUnit = uniqueQueries[0].Unit
-			}
-
-			err = service.SendFeishuStandardChart(webhook.URL, allDataPoints, cardTitle, cardTemplate,
-				queryUnit, buttonText, buttonURL, showDataLabel.Int64 == 1)
+		// 图表模式：每个查询系列使用自己的单位（已在 QueryDataPoints 中保存）
+		// 为了向后兼容，如果没有设置单位，使用任务级别的单位
+		err = service.SendFeishuStandardChart(webhook.URL, allDataPoints, cardTitle, cardTemplate,
+			unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
 
 			if err != nil {
 				log.Printf("[TaskQueue] 发送失败: %v", err)

@@ -37,6 +37,7 @@ type QueryDataPoints struct {
 	DataPoints []DataPoint `json:"data_points"`
 	ChartType  string      `json:"chart_type"`
 	ChartTitle string      `json:"chart_title"`
+	Unit       string      `json:"unit"` // 每个查询的独立单位
 }
 
 // 新增：发送记录结构体
