@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 9 // 版本9: 添加push_mode列到push_task表，并迁移配置数据
+const CurrentSchemaVersion = 10 // 版本10: 清理孤立的关联记录
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {
@@ -254,6 +254,28 @@ var migrations = []Migration{
 			metric_label = (SELECT COALESCE(metric_label, 'pod') FROM push_task WHERE push_task.id = push_task_promql.task_id),
 			custom_metric_label = (SELECT COALESCE(custom_metric_label, '') FROM push_task WHERE push_task.id = push_task_promql.task_id)
 		WHERE EXISTS (SELECT 1 FROM push_task WHERE push_task.id = push_task_promql.task_id);
+		`,
+	},
+	{
+		Version:     10,
+		Description: "清理孤立的关联记录（已删除任务遗留的记录）",
+		SQL: `
+		-- 清理孤立的 push_task_promql 记录
+		-- 这些记录引用的 task_id 在 push_task 表中已不存在
+		DELETE FROM push_task_promql 
+		WHERE task_id NOT IN (SELECT id FROM push_task);
+		
+		-- 清理孤立的 push_task_webhook 记录
+		DELETE FROM push_task_webhook 
+		WHERE task_id NOT IN (SELECT id FROM push_task);
+		
+		-- 清理孤立的 push_task_send_time 记录
+		DELETE FROM push_task_send_time 
+		WHERE task_id NOT IN (SELECT id FROM push_task);
+		
+		-- 清理孤立的 push_task_query 记录（旧格式）
+		DELETE FROM push_task_query 
+		WHERE task_id NOT IN (SELECT id FROM push_task);
 		`,
 	},
 }
@@ -608,6 +630,24 @@ func migrate(db *sql.DB) error {
 		// 提交事务
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("提交事务失败 (版本 %d): %w", migration.Version, err)
+		}
+
+		log.Printf("[数据库] 迁移版本 %d 执行成功", migration.Version)
+
+		// 版本10特殊处理：记录清理统计
+		if migration.Version == 10 {
+			// 查询每个表剩余的记录数，以确认清理效果
+			var promqlCount, webhookCount, sendtimeCount, queryCount int
+			
+			db.QueryRow("SELECT COUNT(*) FROM push_task_promql").Scan(&promqlCount)
+			db.QueryRow("SELECT COUNT(*) FROM push_task_webhook").Scan(&webhookCount)
+			db.QueryRow("SELECT COUNT(*) FROM push_task_send_time").Scan(&sendtimeCount)
+			db.QueryRow("SELECT COUNT(*) FROM push_task_query").Scan(&queryCount)
+			
+			log.Printf("[数据库清理] 孤立记录清理完成")
+			log.Printf("[数据库清理] 当前记录数 - push_task_promql: %d, push_task_webhook: %d, push_task_send_time: %d, push_task_query: %d",
+				promqlCount, webhookCount, sendtimeCount, queryCount)
+			log.Printf("[数据库清理] 现在可以正常删除不再使用的 PromQL 了")
 		}
 
 		// 更新当前版本

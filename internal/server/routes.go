@@ -1187,9 +1187,38 @@ func deletePushTask(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": dberr.Error()})
 		return
 	}
-	// 先删除 push_task_webhook
-	db.Exec("DELETE FROM push_task_webhook WHERE task_id=?", id)
-	// 再删除 push_task
+	
+	// 删除所有关联数据
+	log.Printf("[deletePushTask] 开始删除任务 ID=%d 及其关联数据", id)
+	
+	// 1. 删除 push_task_webhook
+	_, err = db.Exec("DELETE FROM push_task_webhook WHERE task_id=?", id)
+	if err != nil {
+		log.Printf("[deletePushTask] 删除 push_task_webhook 失败: %v", err)
+	}
+	
+	// 2. 删除 push_task_promql（重要！）
+	result, err := db.Exec("DELETE FROM push_task_promql WHERE task_id=?", id)
+	if err != nil {
+		log.Printf("[deletePushTask] 删除 push_task_promql 失败: %v", err)
+	} else {
+		rows, _ := result.RowsAffected()
+		log.Printf("[deletePushTask] 删除 push_task_promql 成功，删除了 %d 条记录", rows)
+	}
+	
+	// 3. 删除 push_task_send_time
+	_, err = db.Exec("DELETE FROM push_task_send_time WHERE task_id=?", id)
+	if err != nil {
+		log.Printf("[deletePushTask] 删除 push_task_send_time 失败: %v", err)
+	}
+	
+	// 4. 删除 push_task_query（旧格式）
+	_, err = db.Exec("DELETE FROM push_task_query WHERE task_id=?", id)
+	if err != nil {
+		log.Printf("[deletePushTask] 删除 push_task_query 失败: %v", err)
+	}
+	
+	// 5. 最后删除 push_task 主记录
 	res, delErr := db.Exec("DELETE FROM push_task WHERE id=?", id)
 	if delErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": delErr.Error()})
@@ -1200,6 +1229,8 @@ func deletePushTask(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "push_task not found"})
 		return
 	}
+	
+	log.Printf("[deletePushTask] 任务删除成功 ID=%d", id)
 	c.JSON(http.StatusOK, gin.H{"message": "deleted", "task_id": id})
 }
 
@@ -1872,7 +1903,7 @@ func deletePromQL(c *gin.Context) {
 	}
 
 	if count > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete: this PromQL is being used by tasks"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("无法删除：此 PromQL 正在被 %d 个任务使用", count)})
 		return
 	}
 

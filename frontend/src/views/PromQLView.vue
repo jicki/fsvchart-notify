@@ -287,7 +287,9 @@ const deletePromQL = async (id: number) => {
     emit('promql-updated')
   } catch (error: any) {
     console.error('删除PromQL查询失败:', error)
-    alert('删除PromQL查询失败，可能正在被任务使用')
+    // 显示后端返回的具体错误信息
+    const errorMessage = error.response?.data?.error || error.message || '删除PromQL查询失败'
+    alert(`删除失败: ${errorMessage}\n\n如果此 PromQL 正在被任务使用，请先删除或修改相关任务。`)
   }
 }
 

@@ -254,32 +254,9 @@
         </select>
       </label>
     </div>
-      <div class="form-group">
-      <label>指标标签:
-        <select v-model="newTaskMetricLabel">
-          <option value="pod">Pod 名称</option>
-          <option value="namespace">命名空间</option>
-          <option value="container">容器名称</option>
-          <option value="instance">实例</option>
-          <option value="job">任务名</option>
-          <option value="node">节点名称</option>
-          <option value="cluster">集群名称</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="form-group">
-      <label>自定义指标标签:
-        <input type="text" v-model="newTaskCustomMetricLabel" placeholder="留空则使用标准指标标签" />
-      </label>
-      <small>如果设置，将覆盖上方选择的标准指标标签</small>
-    </div>
-
-      <div class="form-group">
-      <label>展示单位:
-        <input v-model="newTaskUnit" placeholder="例如: MB, GB, %, ms"/>
-      </label>
-    </div>
+    
+    <!-- 已移至每个 PromQL 的独立配置面板中 -->
+    <!-- 指标标签、自定义指标标签、展示单位现在在每个 PromQL 的配置中单独设置 -->
 
       <div class="form-group">
       <label>按钮文本:
@@ -370,6 +347,21 @@
       </div>
       
       <div class="form-group">
+        <label>推送模式:</label>
+        <div class="push-mode-selection">
+          <label>
+            <input type="radio" v-model="editTaskPushMode" value="chart" />
+            图表模式
+          </label>
+          <label>
+            <input type="radio" v-model="editTaskPushMode" value="text" />
+            文本模式
+          </label>
+        </div>
+        <small>图表模式：显示时间序列图表；文本模式：仅显示最新值</small>
+      </div>
+      
+      <div class="form-group">
         <label>选择预定义 PromQL 查询 (必选):</label>
         <div class="promql-selection">
           <div v-if="promqls.length > 0">
@@ -399,6 +391,39 @@
                 <pre class="promql-query" v-html="highlightPromQL(promql.query)"></pre>
                 <div class="promql-description" v-if="promql.description">
                   {{ promql.description }}
+                </div>
+                
+                <!-- 为选中的 PromQL 添加配置面板 -->
+                <div v-if="editSelectedPromQLs.includes(promql.id.toString())" class="promql-config">
+                  <h5>PromQL 配置</h5>
+                  <div class="config-group">
+                    <label>单位:</label>
+                    <input 
+                      type="text" 
+                      v-model="editPromqlConfigs[promql.id].unit" 
+                      placeholder="例如: MB, GB, %, ms" 
+                    />
+                  </div>
+                  <div class="config-group">
+                    <label>指标标签:</label>
+                    <select v-model="editPromqlConfigs[promql.id].metric_label">
+                      <option value="pod">Pod 名称</option>
+                      <option value="namespace">命名空间</option>
+                      <option value="container">容器名称</option>
+                      <option value="instance">实例</option>
+                      <option value="job">任务名</option>
+                      <option value="node">节点名称</option>
+                      <option value="cluster">集群名称</option>
+                    </select>
+                  </div>
+                  <div class="config-group">
+                    <label>自定义指标标签:</label>
+                    <input 
+                      type="text" 
+                      v-model="editPromqlConfigs[promql.id].custom_metric_label" 
+                      placeholder="留空则使用上方标准标签" 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -452,32 +477,9 @@
             </select>
         </label>
       </div>
-      <div class="form-group">
-        <label>指标标签:
-            <select v-model="editTaskMetricLabel">
-              <option value="pod">Pod 名称</option>
-              <option value="namespace">命名空间</option>
-              <option value="container">容器名称</option>
-              <option value="instance">实例</option>
-              <option value="job">任务名</option>
-              <option value="node">节点名称</option>
-              <option value="cluster">集群名称</option>
-            </select>
-        </label>
-      </div>
-
-      <div class="form-group">
-        <label>自定义指标标签:
-          <input type="text" v-model="editTaskCustomMetricLabel" placeholder="留空则使用标准指标标签" />
-        </label>
-        <small>如果设置，将覆盖上方选择的标准指标标签</small>
-      </div>
-
-      <div class="form-group">
-        <label>展示单位:
-            <input v-model="editTaskUnit" placeholder="例如: MB, GB, %, ms"/>
-        </label>
-      </div>
+      
+      <!-- 已移至每个 PromQL 的独立配置面板中 -->
+      <!-- 指标标签、自定义指标标签、展示单位现在在每个 PromQL 的配置中单独设置 -->
 
       <div class="form-group">
         <label>按钮文本:
@@ -600,7 +602,9 @@
                 <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
                   <span class="promql-name">{{ config.promql_name }}</span>
                   <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
-                  <span v-if="config.metric_label" class="config-detail">(标签: {{ config.metric_label }})</span>
+                  <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
+                    (标签: {{ config.custom_metric_label || config.metric_label }})
+                  </span>
                 </div>
               </div>
               <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
@@ -752,10 +756,43 @@ const promqlConfigs = ref<Record<number, {
   custom_metric_label: string
 }>>({})
 
-// 监听 selectedPromQLs 的变化，自动初始化配置
-watch(selectedPromQLs, (newVal) => {
+// PromQL 展开状态管理（必须在 watch 之前声明）
+const expandedPromQLs = ref<number[]>([])
+const isAllPromQLExpanded = ref(false)
+
+// 编辑任务相关状态（必须在 watch 之前声明）
+const isEditing = ref(false)
+const editingTaskId = ref<number | null>(null)
+const editTaskName = ref('')
+const editTaskSourceId = ref('')
+const editTaskTimeRangeValue = ref(1)
+const editTaskTimeRangeUnit = ref('h')
+const editTaskChartTemplateId = ref('')
+const editTaskCardTitle = ref('')
+const editTaskCardTemplate = ref('red')
+const editTaskMetricLabel = ref('pod')
+const editTaskCustomMetricLabel = ref('')
+const editTaskUnit = ref('')
+const editTaskWebhookIds = ref<any[]>([])
+const editSelectedPromQLs = ref<any[]>([])
+const editTaskButtonText = ref('')
+const editTaskButtonURL = ref('')
+
+// 编辑任务时，每个 PromQL 的独立配置
+const editPromqlConfigs = ref<Record<number, {
+  unit: string
+  metric_label: string
+  custom_metric_label: string
+}>>({})
+const editTaskShowDataLabel = ref(false)
+const editTaskPushMode = ref('chart')
+
+// 监听 selectedPromQLs 的变化，自动初始化配置并展开
+watch(selectedPromQLs, (newVal, oldVal) => {
   newVal.forEach(id => {
     const numId = parseInt(id)
+    
+    // 初始化配置
     if (!promqlConfigs.value[numId]) {
       promqlConfigs.value[numId] = {
         unit: newTaskUnit.value || '',
@@ -763,7 +800,63 @@ watch(selectedPromQLs, (newVal) => {
         custom_metric_label: ''
       }
     }
+    
+    // 如果是新选中的 PromQL，自动展开
+    if (!oldVal || !oldVal.includes(id)) {
+      if (!expandedPromQLs.value.includes(numId)) {
+        expandedPromQLs.value.push(numId)
+      }
+    }
   })
+  
+  // 取消选中时，收起并清理配置
+  if (oldVal) {
+    oldVal.forEach(id => {
+      if (!newVal.includes(id)) {
+        const numId = parseInt(id)
+        const index = expandedPromQLs.value.indexOf(numId)
+        if (index !== -1) {
+          expandedPromQLs.value.splice(index, 1)
+        }
+      }
+    })
+  }
+})
+
+// 监听编辑任务时 PromQL 选择的变化，自动初始化配置并展开
+watch(editSelectedPromQLs, (newVal, oldVal) => {
+  newVal.forEach(id => {
+    const numId = parseInt(id)
+    
+    // 初始化配置
+    if (!editPromqlConfigs.value[numId]) {
+      editPromqlConfigs.value[numId] = {
+        unit: editTaskUnit.value || '',
+        metric_label: editTaskMetricLabel.value || 'pod',
+        custom_metric_label: editTaskCustomMetricLabel.value || ''
+      }
+    }
+    
+    // 如果是新选中的 PromQL，自动展开
+    if (!oldVal || !oldVal.includes(id)) {
+      if (!expandedPromQLs.value.includes(numId)) {
+        expandedPromQLs.value.push(numId)
+      }
+    }
+  })
+  
+  // 取消选中时，收起
+  if (oldVal) {
+    oldVal.forEach(id => {
+      if (!newVal.includes(id)) {
+        const numId = parseInt(id)
+        const index = expandedPromQLs.value.indexOf(numId)
+        if (index !== -1) {
+          expandedPromQLs.value.splice(index, 1)
+        }
+      }
+    })
+  }
 })
 
 // 发送时间相关的数据和方法
@@ -801,25 +894,6 @@ function getWeekdayText(weekday) {
     const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     return weekdays[weekday - 1] || '未知'
 }
-
-// 编辑任务相关状态
-const isEditing = ref(false)
-const editingTaskId = ref<number | null>(null)
-const editTaskName = ref('')
-const editTaskSourceId = ref('')
-const editTaskTimeRangeValue = ref(1)
-const editTaskTimeRangeUnit = ref('h')
-const editTaskChartTemplateId = ref('')
-const editTaskCardTitle = ref('')
-const editTaskCardTemplate = ref('red')
-const editTaskMetricLabel = ref('pod')
-const editTaskCustomMetricLabel = ref('')
-const editTaskUnit = ref('')
-const editTaskWebhookIds = ref<any[]>([])
-const editSelectedPromQLs = ref<any[]>([])
-const editTaskButtonText = ref('')
-const editTaskButtonURL = ref('')
-const editTaskShowDataLabel = ref(false) // 添加新的配置项
 
 // ============== API路径测试功能 ==============
 // 更改API路径
@@ -1352,6 +1426,8 @@ function resetEditForm() {
   editTaskButtonText.value = ''
   editTaskButtonURL.value = ''
   editTaskShowDataLabel.value = false // 添加新的配置项
+  editTaskPushMode.value = 'chart' // 重置推送模式
+  editPromqlConfigs.value = {} // 重置 PromQL 配置
   editTaskSendTimes.value = [{ weekday: 1, send_time: '09:00' }]
 }
 
@@ -1603,11 +1679,31 @@ async function updateTask() {
     console.log('[任务更新] 原发送时间:', oldTask?.send_times?.map(t => `${getWeekdayText(t.weekday)} ${t.send_time}`).join(', ') || '无')
     console.log('[任务更新] 原时间范围:', oldTask?.time_range || '无')
     
+    // 构建 PromQL 配置列表
+    const promqlConfigsList = editSelectedPromQLs.value.map(id => {
+      const numId = parseInt(id)
+      const config = editPromqlConfigs.value[numId] || {
+        unit: '',
+        metric_label: 'pod',
+        custom_metric_label: ''
+      }
+      return {
+        promql_id: numId,
+        unit: config.unit,
+        metric_label: config.metric_label,
+        custom_metric_label: config.custom_metric_label,
+        chart_template_id: parseInt(editTaskChartTemplateId.value) || null
+      }
+    })
+    
+    console.log('[任务更新] PromQL 配置列表:', promqlConfigsList)
+    
     const payload = {
       id: editingTaskId.value,
       name: editTaskName.value,
       source_id: parseInt(editTaskSourceId.value),
       promql_ids: editSelectedPromQLs.value.map(id => parseInt(id)),
+      promql_configs: promqlConfigsList, // 新增：每个 PromQL 的独立配置
       query: editSelectedPromQLs.value.map(id => {
         const promql = promqls.value.find(p => p.id.toString() === id)
         return promql ? promql.query : ''
@@ -1624,6 +1720,7 @@ async function updateTask() {
       button_text: editTaskButtonText.value,
       button_url: editTaskButtonURL.value,
       show_data_label: editTaskShowDataLabel.value,
+      push_mode: editTaskPushMode.value, // 添加推送模式
       enabled: 1,
       send_times: editTaskSendTimes.value.map(time => ({
         weekday: parseInt(time.weekday),
@@ -1682,12 +1779,12 @@ async function updateTask() {
   }
 }
 
+// 定期刷新的定时器（需要在 onMounted 外部声明，以便在 onUnmounted 中访问）
+let refreshInterval: number | null = null
+
 // 生命周期钩子
 onMounted(async () => {
   debug('组件已挂载，开始初始化...')
-  
-  // 设置定期刷新的间隔
-  let refreshInterval: number | null = null
 
   try {
     // 获取数据
@@ -1824,6 +1921,7 @@ function editTask(task) {
   editTaskButtonText.value = task.button_text || ''
   editTaskButtonURL.value = task.button_url || ''
   editTaskShowDataLabel.value = task.show_data_label || false
+  editTaskPushMode.value = task.push_mode || 'chart' // 加载推送模式
   
   // 设置发送时间
   if (Array.isArray(task.send_times) && task.send_times.length > 0) {
@@ -1833,6 +1931,30 @@ function editTask(task) {
     }))
   } else {
     editTaskSendTimes.value = [{ weekday: 1, send_time: '09:00' }]
+  }
+  
+  // 加载每个 PromQL 的独立配置
+  editPromqlConfigs.value = {}
+  if (task.promql_configs && task.promql_configs.length > 0) {
+    // 从 promql_configs 加载配置
+    task.promql_configs.forEach(config => {
+      editPromqlConfigs.value[config.promql_id] = {
+        unit: config.unit || '',
+        metric_label: config.metric_label || 'pod',
+        custom_metric_label: config.custom_metric_label || ''
+      }
+    })
+    console.log('[编辑任务] 加载 PromQL 配置:', editPromqlConfigs.value)
+  } else if (task.promql_ids && task.promql_ids.length > 0) {
+    // 向后兼容：如果没有 promql_configs，使用任务级别的配置
+    task.promql_ids.forEach(promqlId => {
+      editPromqlConfigs.value[promqlId] = {
+        unit: task.unit || '',
+        metric_label: task.metric_label || 'pod',
+        custom_metric_label: task.custom_metric_label || ''
+      }
+    })
+    console.log('[编辑任务] 使用任务级别配置初始化 PromQL:', editPromqlConfigs.value)
   }
   
   // 添加调试日志
@@ -1875,7 +1997,8 @@ async function addPushTask() {
       alert('请至少设置一个发送时间')
       return
     }
-    if (!newTaskChartTemplateId.value) {
+    // 只在图表模式下才需要选择图表模板
+    if (newTaskPushMode.value === 'chart' && !newTaskChartTemplateId.value) {
       alert('请选择图表模板')
       return
     }
@@ -1896,6 +2019,8 @@ async function addPushTask() {
         chart_template_id: parseInt(newTaskChartTemplateId.value) || null
       }
     })
+    
+    console.log('[创建任务] PromQL 配置列表:', promqlConfigsList)
 
     // 构建请求数据
     const payload = {
@@ -2138,10 +2263,6 @@ async function copyTask(task) {
     alert(errorMsg)
   }
 }
-
-// 添加 PromQL 展开状态管理
-const expandedPromQLs = ref<number[]>([])
-const isAllPromQLExpanded = ref(false)
 
 // 展开/收起所有 PromQL 查询
 function toggleAllPromQLs() {
