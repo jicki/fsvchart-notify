@@ -1492,6 +1492,7 @@ func SendFeishuTextCard(webhookURL string, promqlMetrics map[string][]LatestMetr
 	Unit              string
 	MetricLabel       string
 	CustomMetricLabel string
+	InitialUnit       string
 }, cardTitle, cardTemplate, buttonText, buttonURL string) error {
 	log.Printf("[SendFeishuTextCard] ====== START ======")
 	log.Printf("[SendFeishuTextCard] Webhook: %s, CardTitle: %s", webhookURL, cardTitle)

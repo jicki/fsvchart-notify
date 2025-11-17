@@ -204,14 +204,14 @@ func GetDurationStep(d time.Duration) time.Duration {
 //     例如，如果customLabel="resource"，则会从指标数据中提取"resource"标签对应的值（如"cpu"、"memory"、"gpu"等）
 //     作为DataPoint.Type。如果指标中不存在该标签的值，则会跳过该结果。
 //     此参数还会过滤数据点，确保只有customLabel对应的值会显示在图表上，而不显示其他标签的值（如team="mlp"）。
-func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duration, seriesType string, customLabel string) ([]models.DataPoint, error) {
+func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duration, seriesType string, customLabel string, initialUnit string, targetUnit string) ([]models.DataPoint, error) {
 	logMsg := fmt.Sprintf("[FetchMetrics] ====== START ======")
 	log.Print(logMsg)
 	GetLogManager().AddLog(logMsg)
 
 	log.Printf("[FetchMetrics] Parameters:")
-	log.Printf("[FetchMetrics] Query: %s, TimeRange: %v to %v, Step: %v, SeriesType: %s, CustomLabel: %s",
-		query, start, end, step, seriesType, customLabel)
+	log.Printf("[FetchMetrics] Query: %s, TimeRange: %v to %v, Step: %v, SeriesType: %s, CustomLabel: %s, InitialUnit: %s, TargetUnit: %s",
+		query, start, end, step, seriesType, customLabel, initialUnit, targetUnit)
 
 	duration := end.Sub(start)
 	log.Printf("[FetchMetrics] Duration: %v, Input step: %v", duration, step)
@@ -709,6 +709,17 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 				}
 			}
 
+			// 应用单位转换（如果配置了 initial_unit）
+			if initialUnit != "" && targetUnit != "" {
+				convertedValue, err := ConvertUnit(floatVal, initialUnit, targetUnit)
+				if err != nil {
+					log.Printf("[FetchMetrics] WARNING: Unit conversion failed (%s -> %s): %v, using original value", initialUnit, targetUnit, err)
+				} else {
+					log.Printf("[FetchMetrics] Unit conversion: %.2f %s -> %.2f %s", floatVal, initialUnit, convertedValue, targetUnit)
+					floatVal = convertedValue
+				}
+			}
+
 			floatVal = math.Round(floatVal*100) / 100
 			// ## 打印原始值和转换后的值
 			// log.Printf("[FetchMetrics] Value conversion: original='%s', parsed=%f, final=%f",
@@ -931,10 +942,10 @@ type LatestMetric struct {
 // 返回值:
 //   - []LatestMetric: 每个时间序列的最新指标值列表
 //   - error: 错误信息
-func FetchLatestMetrics(baseURL, query, seriesType, customLabel string) ([]LatestMetric, error) {
+func FetchLatestMetrics(baseURL, query, seriesType, customLabel, initialUnit, targetUnit string) ([]LatestMetric, error) {
 	log.Printf("[FetchLatestMetrics] ====== START ======")
-	log.Printf("[FetchLatestMetrics] Query: %s, SeriesType: %s, CustomLabel: %s",
-		query, seriesType, customLabel)
+	log.Printf("[FetchLatestMetrics] Query: %s, SeriesType: %s, CustomLabel: %s, InitialUnit: %s, TargetUnit: %s",
+		query, seriesType, customLabel, initialUnit, targetUnit)
 
 	// 构建查询 URL - 使用 query 接口获取即时值
 	u, err := url.Parse(baseURL)
@@ -1038,22 +1049,33 @@ func FetchLatestMetrics(baseURL, query, seriesType, customLabel string) ([]Lates
 		timestamp := int64(result.Value[0].(float64))
 		valueStr := result.Value[1].(string)
 
-		// 转换值为 float64
-		value, err := strconv.ParseFloat(valueStr, 64)
+	// 转换值为 float64
+	value, err := strconv.ParseFloat(valueStr, 64)
+	if err != nil {
+		log.Printf("[FetchLatestMetrics] ERROR: Failed to parse value '%s': %v", valueStr, err)
+		continue
+	}
+
+	// 应用单位转换（如果配置了 initial_unit）
+	if initialUnit != "" && targetUnit != "" {
+		convertedValue, err := ConvertUnit(value, initialUnit, targetUnit)
 		if err != nil {
-			log.Printf("[FetchLatestMetrics] ERROR: Failed to parse value '%s': %v", valueStr, err)
-			continue
+			log.Printf("[FetchLatestMetrics] WARNING: Unit conversion failed (%s -> %s): %v, using original value", initialUnit, targetUnit, err)
+		} else {
+			log.Printf("[FetchLatestMetrics] Unit conversion: %.2f %s -> %.2f %s", value, initialUnit, convertedValue, targetUnit)
+			value = convertedValue
 		}
+	}
 
-		// 四舍五入到两位小数
-		value = math.Round(value*100) / 100
+	// 四舍五入到两位小数
+	value = math.Round(value*100) / 100
 
-		// 创建最新指标记录
-		latestMetric := LatestMetric{
-			Label: labelValue,
-			Value: value,
-			Time:  time.Unix(timestamp, 0),
-		}
+	// 创建最新指标记录
+	latestMetric := LatestMetric{
+		Label: labelValue,
+		Value: value,
+		Time:  time.Unix(timestamp, 0),
+	}
 
 		latestMetrics = append(latestMetrics, latestMetric)
 		log.Printf("[FetchLatestMetrics] Added metric: Label=%s, Value=%.2f, Time=%s",

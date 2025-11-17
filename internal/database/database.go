@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 10 // 版本10: 清理孤立的关联记录
+const CurrentSchemaVersion = 11 // 版本11: 添加 initial_unit 字段支持单位自动转换
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {
@@ -49,6 +49,7 @@ var currentStructures = map[string]TableStructure{
 			"unit":                "TEXT",
 			"metric_label":        "TEXT",
 			"custom_metric_label": "TEXT",
+			"initial_unit":        "TEXT",
 		},
 	},
 	// 其他表可以按需添加...
@@ -276,6 +277,16 @@ var migrations = []Migration{
 		-- 清理孤立的 push_task_query 记录（旧格式）
 		DELETE FROM push_task_query 
 		WHERE task_id NOT IN (SELECT id FROM push_task);
+		`,
+	},
+	{
+		Version:     11,
+		Description: "添加 initial_unit 字段支持单位自动转换",
+		SQL: `
+		-- 为 push_task_promql 表添加 initial_unit 字段
+		-- 用于存储原始单位，系统会自动转换为目标单位
+		-- 支持: bytes (B/KB/MB/GB/TB/PB), time (ns/μs/ms/s/m/h), ms 等
+		ALTER TABLE push_task_promql ADD COLUMN initial_unit TEXT DEFAULT '';
 		`,
 	},
 }

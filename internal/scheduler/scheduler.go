@@ -383,18 +383,9 @@ func insertPushStatus(db *sql.DB, sourceID, webhookID int64, err error) {
 	}
 }
 
-// runSingleTaskPush 执行单个任务的推送
-func runSingleTaskPush(db *sql.DB, taskID int64) error {
-	// 获取任务互斥锁，确保同一任务不会并行执行
-	taskMutex := getTaskMutex(taskID)
-
-	// 尝试获取锁
-	if !taskMutex.TryLock() {
-		log.Printf("[TaskQueue] 任务 ID=%d 已经在执行中，跳过本次执行", taskID)
-		return nil
-	}
-	defer taskMutex.Unlock()
-
+// runSingleTaskPushWithoutLock 执行单个任务的推送（不加锁版本）
+// 此函数假设调用者已经获取了任务锁
+func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	log.Printf("[TaskQueue] ===== 开始执行任务 ID=%d =====", taskID)
 
 	// 获取任务详情
@@ -445,6 +436,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		Unit              string
 		MetricLabel       string
 		CustomMetricLabel string
+		InitialUnit       string
 	}
 
 	// 查询任务的所有查询及其独立配置
@@ -452,7 +444,8 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		SELECT ptp.promql_id, p.query, ptp.chart_template_id, p.name,
 		       COALESCE(ptp.unit, '') as unit,
 		       COALESCE(ptp.metric_label, 'pod') as metric_label,
-		       COALESCE(ptp.custom_metric_label, '') as custom_metric_label
+		       COALESCE(ptp.custom_metric_label, '') as custom_metric_label,
+		       COALESCE(ptp.initial_unit, '') as initial_unit
 		FROM push_task_promql ptp
 		JOIN promql p ON ptp.promql_id = p.id
 		WHERE ptp.task_id = ?
@@ -473,9 +466,10 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 			Unit              string
 			MetricLabel       string
 			CustomMetricLabel string
+			InitialUnit       string
 		}
 		if err := rows.Scan(&promqlID, &q.Query, &q.ChartTemplateID, &q.PromQLName,
-			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel); err != nil {
+			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel, &q.InitialUnit); err != nil {
 			log.Printf("[TaskQueue] 扫描PromQL行失败: %v", err)
 			continue
 		}
@@ -484,7 +478,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		if !seenQueries[q.Query] {
 			seenQueries[q.Query] = true
 			uniqueQueries = append(uniqueQueries, q)
-			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s)", q.Query, q.Unit, q.MetricLabel)
+			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s, initial_unit=%s)", q.Query, q.Unit, q.MetricLabel, q.InitialUnit)
 		} else {
 			log.Printf("[TaskQueue] 跳过重复查询: %s", q.Query)
 		}
@@ -510,6 +504,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 					Unit              string
 					MetricLabel       string
 					CustomMetricLabel string
+					InitialUnit       string
 				}
 				if err := queryRows.Scan(&q.Query, &q.ChartTemplateID); err != nil {
 					log.Printf("[TaskQueue] 扫描查询行失败: %v", err)
@@ -520,6 +515,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 				q.Unit = unit
 				q.MetricLabel = metricLabel
 				q.CustomMetricLabel = customMetricLabel
+				q.InitialUnit = "" // 旧格式没有 initial_unit
 
 				// 使用查询内容作为去重键
 				if !seenQueries[q.Query] {
@@ -548,6 +544,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 					Unit              string
 					MetricLabel       string
 					CustomMetricLabel string
+					InitialUnit       string
 				}{
 					Query:             query,
 					ChartTemplateID:   chartTemplateID,
@@ -555,6 +552,7 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 					Unit:              unit,
 					MetricLabel:       metricLabel,
 					CustomMetricLabel: customMetricLabel,
+					InitialUnit:       "", // 旧格式没有 initial_unit
 				})
 				log.Printf("[TaskQueue] 添加任务表中的查询: %s", query)
 			}
@@ -618,52 +616,55 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 		// 文本模式：获取每个 PromQL 的最新值
 		log.Printf("[TaskQueue] 使用文本模式，获取最新指标值")
 
-		// 为每个 PromQL 获取最新值
-		promqlMetrics := make(map[string][]service.LatestMetric)
-		promqlConfigs := make(map[string]struct {
+	// 为每个 PromQL 获取最新值
+	promqlMetrics := make(map[string][]service.LatestMetric)
+	promqlConfigs := make(map[string]struct {
+		Name              string
+		Unit              string
+		MetricLabel       string
+		CustomMetricLabel string
+		InitialUnit       string
+	})
+
+	for i, query := range uniqueQueries {
+		log.Printf("[TaskQueue] 获取查询 %d 的最新指标值: %s", i+1, query.Query)
+
+		// 确定使用哪个标签
+		queryMetricLabel := query.MetricLabel
+		queryCustomLabel := query.CustomMetricLabel
+		if queryMetricLabel == "" {
+			queryMetricLabel = metricLabel
+		}
+
+		// 获取最新指标值（应用单位转换）
+		latestMetrics, err := service.FetchLatestMetrics(sourceURL, query.Query, queryMetricLabel, queryCustomLabel, query.InitialUnit, query.Unit)
+		if err != nil {
+			log.Printf("[TaskQueue] 获取最新指标值失败: %v", err)
+			continue
+		}
+
+		promqlName := query.PromQLName
+		if promqlName == "" {
+			promqlName = fmt.Sprintf("查询 %d", i+1)
+		}
+
+		promqlMetrics[promqlName] = latestMetrics
+		promqlConfigs[promqlName] = struct {
 			Name              string
 			Unit              string
 			MetricLabel       string
 			CustomMetricLabel string
-		})
-
-		for i, query := range uniqueQueries {
-			log.Printf("[TaskQueue] 获取查询 %d 的最新指标值: %s", i+1, query.Query)
-
-			// 确定使用哪个标签
-			queryMetricLabel := query.MetricLabel
-			queryCustomLabel := query.CustomMetricLabel
-			if queryMetricLabel == "" {
-				queryMetricLabel = metricLabel
-			}
-
-			// 获取最新指标值
-			latestMetrics, err := service.FetchLatestMetrics(sourceURL, query.Query, queryMetricLabel, queryCustomLabel)
-			if err != nil {
-				log.Printf("[TaskQueue] 获取最新指标值失败: %v", err)
-				continue
-			}
-
-			promqlName := query.PromQLName
-			if promqlName == "" {
-				promqlName = fmt.Sprintf("查询 %d", i+1)
-			}
-
-			promqlMetrics[promqlName] = latestMetrics
-			promqlConfigs[promqlName] = struct {
-				Name              string
-				Unit              string
-				MetricLabel       string
-				CustomMetricLabel string
-			}{
-				Name:              promqlName,
-				Unit:              query.Unit,
-				MetricLabel:       queryMetricLabel,
-				CustomMetricLabel: queryCustomLabel,
-			}
-
-			log.Printf("[TaskQueue] PromQL '%s' 获取到 %d 个最新指标", promqlName, len(latestMetrics))
+			InitialUnit       string
+		}{
+			Name:              promqlName,
+			Unit:              query.Unit,
+			MetricLabel:       queryMetricLabel,
+			CustomMetricLabel: queryCustomLabel,
+			InitialUnit:       query.InitialUnit,
 		}
+
+		log.Printf("[TaskQueue] PromQL '%s' 获取到 %d 个最新指标", promqlName, len(latestMetrics))
+	}
 
 		if len(promqlMetrics) == 0 {
 			log.Printf("[TaskQueue] 未获取到任何最新指标，任务终止")
@@ -725,20 +726,20 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 			chartType = service.GetSupportedChartType(chartType)
 			log.Printf("[TaskQueue] 查询 %d: 使用图表类型 %s", i+1, chartType)
 
-			// 确定使用哪个标签
-			queryMetricLabel := query.MetricLabel
-			queryCustomLabel := query.CustomMetricLabel
-			if queryMetricLabel == "" {
-				queryMetricLabel = metricLabel
-			}
+		// 确定使用哪个标签
+		queryMetricLabel := query.MetricLabel
+		queryCustomLabel := query.CustomMetricLabel
+		if queryMetricLabel == "" {
+			queryMetricLabel = metricLabel
+		}
 
-			// 获取数据点
-			log.Printf("[TaskQueue] 开始获取查询 %d 的指标数据: %s (label=%s)", i+1, query.Query, queryMetricLabel)
-			dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, queryMetricLabel, queryCustomLabel)
-			if err != nil {
-				log.Printf("[TaskQueue] 获取指标数据失败: %v", err)
-				continue
-			}
+		// 获取数据点（应用单位转换）
+		log.Printf("[TaskQueue] 开始获取查询 %d 的指标数据: %s (label=%s)", i+1, query.Query, queryMetricLabel)
+		dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, queryMetricLabel, queryCustomLabel, query.InitialUnit, query.Unit)
+		if err != nil {
+			log.Printf("[TaskQueue] 获取指标数据失败: %v", err)
+			continue
+		}
 
 			// 生成图表标题
 			chartTitle := query.PromQLName
@@ -821,6 +822,21 @@ func runSingleTaskPush(db *sql.DB, taskID int64) error {
 	return nil
 }
 
+// runSingleTaskPush 执行单个任务的推送（带锁版本，内部使用）
+func runSingleTaskPush(db *sql.DB, taskID int64) error {
+	// 获取任务互斥锁，确保同一任务不会并行执行
+	taskMutex := getTaskMutex(taskID)
+
+	// 尝试获取锁
+	if !taskMutex.TryLock() {
+		log.Printf("[TaskQueue] 任务 ID=%d 已经在执行中，跳过本次执行", taskID)
+		return fmt.Errorf("任务 ID=%d 已经在执行中", taskID)
+	}
+	defer taskMutex.Unlock()
+
+	return runSingleTaskPushWithoutLock(db, taskID)
+}
+
 // RunSingleTaskPush 执行单个任务的推送（公共导出版本）
 // 提供给server包和其他外部包调用，确保任务执行有互斥控制
 func RunSingleTaskPush(db *sql.DB, taskID int64) error {
@@ -836,4 +852,30 @@ func RunSingleTaskPush(db *sql.DB, taskID int64) error {
 	}()
 
 	return runSingleTaskPush(db, taskID)
+}
+
+// ForceRunSingleTaskPush 立即执行任务（跳过间隔检查）
+// 用于手动触发的任务执行，不受最小执行间隔限制
+func ForceRunSingleTaskPush(db *sql.DB, taskID int64) error {
+	log.Printf("[ForceRunSingleTaskPush] 手动执行任务 ID=%d，跳过间隔检查", taskID)
+	
+	// 获取任务互斥锁，确保同一任务不会并行执行
+	taskMutex := getTaskMutex(taskID)
+	
+	// 尝试获取锁
+	if !taskMutex.TryLock() {
+		msg := fmt.Sprintf("任务 ID=%d 已经在执行中，请稍后再试", taskID)
+		log.Printf("[ForceRunSingleTaskPush] %s", msg)
+		return fmt.Errorf(msg)
+	}
+	defer taskMutex.Unlock()
+	
+	// 更新任务状态为运行中
+	taskQueue.updateTaskStatus(taskID, true, nil)
+	defer func() {
+		taskQueue.updateTaskStatus(taskID, false, nil)
+	}()
+
+	// 直接调用不带锁的版本，避免双重加锁
+	return runSingleTaskPushWithoutLock(db, taskID)
 }

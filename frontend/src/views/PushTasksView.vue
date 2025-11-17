@@ -170,38 +170,52 @@
                   {{ promql.description }}
                 </div>
                 
-                <!-- 为选中的 PromQL 添加配置面板 -->
-                <div v-if="selectedPromQLs.includes(promql.id.toString())" class="promql-config">
-                  <h5>PromQL 配置</h5>
-                  <div class="config-group">
-                    <label>单位:</label>
-                    <input 
-                      type="text" 
-                      v-model="promqlConfigs[promql.id].unit" 
-                      placeholder="例如: MB, GB, %, ms" 
-                    />
-                  </div>
-                  <div class="config-group">
-                    <label>指标标签:</label>
-                    <select v-model="promqlConfigs[promql.id].metric_label">
-                      <option value="pod">Pod 名称</option>
-                      <option value="namespace">命名空间</option>
-                      <option value="container">容器名称</option>
-                      <option value="instance">实例</option>
-                      <option value="job">任务名</option>
-                      <option value="node">节点名称</option>
-                      <option value="cluster">集群名称</option>
-                    </select>
-                  </div>
-                  <div class="config-group">
-                    <label>自定义指标标签:</label>
-                    <input 
-                      type="text" 
-                      v-model="promqlConfigs[promql.id].custom_metric_label" 
-                      placeholder="留空则使用上方标准标签" 
-                    />
-                  </div>
+              <!-- 为选中的 PromQL 添加配置面板 -->
+              <div v-if="selectedPromQLs.includes(promql.id.toString())" class="promql-config">
+                <h5>PromQL 配置</h5>
+              <div class="config-group">
+                <label>初始单位 (可选):</label>
+                <input 
+                  type="text" 
+                  v-model="promqlConfigs[promql.id].initial_unit" 
+                  placeholder="例如: bytes, ms, s (留空则不转换)" 
+                />
+                <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
+              </div>
+              <div class="config-group">
+                <label>单位:</label>
+                <input 
+                  type="text" 
+                  v-model="promqlConfigs[promql.id].unit" 
+                  placeholder="例如: TiB, GiB, s, m" 
+                />
+                <small style="color: #666;">
+                  <strong>字节单位说明：</strong><br>
+                  • TB/GB/MB (1000进制): 1 TB = 1000³ MB<br>
+                  • TiB/GiB/MiB (1024进制): 1 TiB = 1024³ MiB ← 推荐
+                </small>
+              </div>
+                <div class="config-group">
+                  <label>指标标签:</label>
+                  <select v-model="promqlConfigs[promql.id].metric_label">
+                    <option value="pod">Pod 名称</option>
+                    <option value="namespace">命名空间</option>
+                    <option value="container">容器名称</option>
+                    <option value="instance">实例</option>
+                    <option value="job">任务名</option>
+                    <option value="node">节点名称</option>
+                    <option value="cluster">集群名称</option>
+                  </select>
                 </div>
+                <div class="config-group">
+                  <label>自定义指标标签:</label>
+                  <input 
+                    type="text" 
+                    v-model="promqlConfigs[promql.id].custom_metric_label" 
+                    placeholder="留空则使用上方标准标签" 
+                  />
+                </div>
+              </div>
               </div>
             </div>
           </div>
@@ -393,38 +407,52 @@
                   {{ promql.description }}
                 </div>
                 
-                <!-- 为选中的 PromQL 添加配置面板 -->
-                <div v-if="editSelectedPromQLs.includes(promql.id.toString())" class="promql-config">
-                  <h5>PromQL 配置</h5>
-                  <div class="config-group">
-                    <label>单位:</label>
-                    <input 
-                      type="text" 
-                      v-model="editPromqlConfigs[promql.id].unit" 
-                      placeholder="例如: MB, GB, %, ms" 
-                    />
-                  </div>
-                  <div class="config-group">
-                    <label>指标标签:</label>
-                    <select v-model="editPromqlConfigs[promql.id].metric_label">
-                      <option value="pod">Pod 名称</option>
-                      <option value="namespace">命名空间</option>
-                      <option value="container">容器名称</option>
-                      <option value="instance">实例</option>
-                      <option value="job">任务名</option>
-                      <option value="node">节点名称</option>
-                      <option value="cluster">集群名称</option>
-                    </select>
-                  </div>
-                  <div class="config-group">
-                    <label>自定义指标标签:</label>
-                    <input 
-                      type="text" 
-                      v-model="editPromqlConfigs[promql.id].custom_metric_label" 
-                      placeholder="留空则使用上方标准标签" 
-                    />
-                  </div>
+              <!-- 为选中的 PromQL 添加配置面板 -->
+              <div v-if="editSelectedPromQLs.includes(promql.id.toString())" class="promql-config">
+                <h5>PromQL 配置</h5>
+              <div class="config-group">
+                <label>初始单位 (可选):</label>
+                <input 
+                  type="text" 
+                  v-model="editPromqlConfigs[promql.id].initial_unit" 
+                  placeholder="例如: bytes, ms, s (留空则不转换)" 
+                />
+                <small style="color: #666;">如果填写初始单位，系统会自动转换为目标单位</small>
+              </div>
+              <div class="config-group">
+                <label>单位:</label>
+                <input 
+                  type="text" 
+                  v-model="editPromqlConfigs[promql.id].unit" 
+                  placeholder="例如: TiB, GiB, s, m" 
+                />
+                <small style="color: #666;">
+                  <strong>字节单位说明：</strong><br>
+                  • TB/GB/MB (1000进制): 1 TB = 1000³ MB<br>
+                  • TiB/GiB/MiB (1024进制): 1 TiB = 1024³ MiB ← 推荐
+                </small>
+              </div>
+                <div class="config-group">
+                  <label>指标标签:</label>
+                  <select v-model="editPromqlConfigs[promql.id].metric_label">
+                    <option value="pod">Pod 名称</option>
+                    <option value="namespace">命名空间</option>
+                    <option value="container">容器名称</option>
+                    <option value="instance">实例</option>
+                    <option value="job">任务名</option>
+                    <option value="node">节点名称</option>
+                    <option value="cluster">集群名称</option>
+                  </select>
                 </div>
+                <div class="config-group">
+                  <label>自定义指标标签:</label>
+                  <input 
+                    type="text" 
+                    v-model="editPromqlConfigs[promql.id].custom_metric_label" 
+                    placeholder="留空则使用上方标准标签" 
+                  />
+                </div>
+              </div>
               </div>
             </div>
           </div>
@@ -598,15 +626,16 @@
                 </div>
             </td>
             <td>
-              <div v-if="task.promql_configs && task.promql_configs.length > 0" class="promql-configs">
-                <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
-                  <span class="promql-name">{{ config.promql_name }}</span>
-                  <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
-                  <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
-                    (标签: {{ config.custom_metric_label || config.metric_label }})
-                  </span>
-                </div>
+            <div v-if="task.promql_configs && task.promql_configs.length > 0" class="promql-configs">
+              <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
+                <span class="promql-name">{{ config.promql_name }}</span>
+                <span v-if="config.initial_unit" class="config-detail">(初始单位: {{ config.initial_unit }})</span>
+                <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
+                <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
+                  (标签: {{ config.custom_metric_label || config.metric_label }})
+                </span>
               </div>
+            </div>
               <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
                 <span v-for="(promqlId, index) in task.promql_ids" :key="promqlId" class="promql-tag">
                   {{ getPromqlName(promqlId) }}{{ index < task.promql_ids.length - 1 ? ', ' : '' }}
@@ -790,16 +819,17 @@ const editTaskPushMode = ref('chart')
 // 监听 selectedPromQLs 的变化，自动初始化配置并展开
 watch(selectedPromQLs, (newVal, oldVal) => {
   newVal.forEach(id => {
-    const numId = parseInt(id)
-    
-    // 初始化配置
-    if (!promqlConfigs.value[numId]) {
-      promqlConfigs.value[numId] = {
-        unit: newTaskUnit.value || '',
-        metric_label: newTaskMetricLabel.value || 'pod',
-        custom_metric_label: ''
-      }
+  const numId = parseInt(id)
+  
+  // 初始化配置
+  if (!promqlConfigs.value[numId]) {
+    promqlConfigs.value[numId] = {
+      unit: newTaskUnit.value || '',
+      metric_label: newTaskMetricLabel.value || 'pod',
+      custom_metric_label: '',
+      initial_unit: ''
     }
+  }
     
     // 如果是新选中的 PromQL，自动展开
     if (!oldVal || !oldVal.includes(id)) {
@@ -833,7 +863,8 @@ watch(editSelectedPromQLs, (newVal, oldVal) => {
       editPromqlConfigs.value[numId] = {
         unit: editTaskUnit.value || '',
         metric_label: editTaskMetricLabel.value || 'pod',
-        custom_metric_label: editTaskCustomMetricLabel.value || ''
+        custom_metric_label: editTaskCustomMetricLabel.value || '',
+        initial_unit: ''
       }
     }
     
@@ -1682,18 +1713,20 @@ async function updateTask() {
     // 构建 PromQL 配置列表
     const promqlConfigsList = editSelectedPromQLs.value.map(id => {
       const numId = parseInt(id)
-      const config = editPromqlConfigs.value[numId] || {
-        unit: '',
-        metric_label: 'pod',
-        custom_metric_label: ''
-      }
-      return {
-        promql_id: numId,
-        unit: config.unit,
-        metric_label: config.metric_label,
-        custom_metric_label: config.custom_metric_label,
-        chart_template_id: parseInt(editTaskChartTemplateId.value) || null
-      }
+    const config = editPromqlConfigs.value[numId] || {
+      unit: '',
+      metric_label: 'pod',
+      custom_metric_label: '',
+      initial_unit: ''
+    }
+    return {
+      promql_id: numId,
+      unit: config.unit,
+      metric_label: config.metric_label,
+      custom_metric_label: config.custom_metric_label,
+      initial_unit: config.initial_unit,
+      chart_template_id: parseInt(editTaskChartTemplateId.value) || null
+    }
     })
     
     console.log('[任务更新] PromQL 配置列表:', promqlConfigsList)
@@ -1938,11 +1971,12 @@ function editTask(task) {
   if (task.promql_configs && task.promql_configs.length > 0) {
     // 从 promql_configs 加载配置
     task.promql_configs.forEach(config => {
-      editPromqlConfigs.value[config.promql_id] = {
-        unit: config.unit || '',
-        metric_label: config.metric_label || 'pod',
-        custom_metric_label: config.custom_metric_label || ''
-      }
+    editPromqlConfigs.value[config.promql_id] = {
+      unit: config.unit || '',
+      metric_label: config.metric_label || 'pod',
+      custom_metric_label: config.custom_metric_label || '',
+      initial_unit: config.initial_unit || ''
+    }
     })
     console.log('[编辑任务] 加载 PromQL 配置:', editPromqlConfigs.value)
   } else if (task.promql_ids && task.promql_ids.length > 0) {
@@ -1951,7 +1985,8 @@ function editTask(task) {
       editPromqlConfigs.value[promqlId] = {
         unit: task.unit || '',
         metric_label: task.metric_label || 'pod',
-        custom_metric_label: task.custom_metric_label || ''
+        custom_metric_label: task.custom_metric_label || '',
+        initial_unit: ''
       }
     })
     console.log('[编辑任务] 使用任务级别配置初始化 PromQL:', editPromqlConfigs.value)
@@ -2003,22 +2038,24 @@ async function addPushTask() {
       return
     }
 
-    // 构建 PromQL 配置列表
-    const promqlConfigsList = selectedPromQLs.value.map(id => {
-      const numId = parseInt(id)
-      const config = promqlConfigs.value[numId] || {
-        unit: '',
-        metric_label: 'pod',
-        custom_metric_label: ''
-      }
-      return {
-        promql_id: numId,
-        unit: config.unit,
-        metric_label: config.metric_label,
-        custom_metric_label: config.custom_metric_label,
-        chart_template_id: parseInt(newTaskChartTemplateId.value) || null
-      }
-    })
+  // 构建 PromQL 配置列表
+  const promqlConfigsList = selectedPromQLs.value.map(id => {
+    const numId = parseInt(id)
+    const config = promqlConfigs.value[numId] || {
+      unit: '',
+      metric_label: 'pod',
+      custom_metric_label: '',
+      initial_unit: ''
+    }
+    return {
+      promql_id: numId,
+      unit: config.unit,
+      metric_label: config.metric_label,
+      custom_metric_label: config.custom_metric_label,
+      initial_unit: config.initial_unit,
+      chart_template_id: parseInt(newTaskChartTemplateId.value) || null
+    }
+  })
     
     console.log('[创建任务] PromQL 配置列表:', promqlConfigsList)
 
