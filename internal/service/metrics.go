@@ -303,24 +303,20 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			currentTime = currentTime.AddDate(0, 0, 1)
 		}
 
-		// 确保包含当前时间点（最新数据）
-		// 如果最后一个时间点早于当前时间，添加当前时间
-		if len(timePoints) > 0 && timePoints[len(timePoints)-1].Before(alignedEnd) {
-			timePoints = append(timePoints, alignedEnd)
-			log.Printf("[FetchMetrics] Added current time point: %s", alignedEnd.Format("2006-01-02 15:04:05"))
-		}
-
 		// 记录生成的时间点
 		log.Printf("[FetchMetrics] Generated %d time points:", len(timePoints))
 		for i, tp := range timePoints {
 			log.Printf("  Point %d: %s", i+1, tp.Format("2006-01-02 15:04:05"))
 		}
 
-		// 更新查询参数 - 使用第一个和最后一个时间点
+		// 更新查询参数
+		// 开始时间使用第一个时间点
+		// 结束时间使用当前时间（alignedEnd），这样 Prometheus 会返回到当前时间为止的所有 8 小时整点数据
 		alignedStart = timePoints[0]
-		if len(timePoints) > 0 {
-			alignedEnd = timePoints[len(timePoints)-1]
-		}
+		// alignedEnd 保持为当前时间，不需要修改
+		log.Printf("[FetchMetrics] Query will use start=%s, end=%s (current time)", 
+			alignedStart.Format("2006-01-02 15:04:05"), 
+			alignedEnd.Format("2006-01-02 15:04:05"))
 	} else {
 		// 对于小于一天的查询，使用常规对齐
 		alignedStart = start.Truncate(step)
