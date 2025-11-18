@@ -321,7 +321,7 @@
       <div class="form-group">
         <label>发送时间设置:</label>
         <div class="send-times">
-            <div v-for="(time, index) in newTaskSendTimes" :key="index" class="send-time-item">
+            <div v-for="(time, index) in newTaskSendTimes" :key="time._id || index" class="send-time-item">
                 <select v-model="time.weekday" class="form-control">
                     <option value="1">周一</option>
                     <option value="2">周二</option>
@@ -569,7 +569,7 @@
       <div class="form-group">
         <label>发送时间设置:</label>
         <div class="send-times">
-            <div v-for="(time, index) in editTaskSendTimes" :key="index" class="send-time-item">
+            <div v-for="(time, index) in editTaskSendTimes" :key="time._id || index" class="send-time-item">
                 <select v-model="time.weekday" class="form-control">
                     <option value="1">周一</option>
                     <option value="2">周二</option>
@@ -917,23 +917,24 @@ watch(editSelectedPromQLs, (newVal, oldVal) => {
 
 // 发送时间相关的数据和方法
 const taskSendTimes = ref([
-    { weekday: 1, send_time: '09:00' }  // 默认周一 09:00
+    { _id: Date.now(), weekday: 1, send_time: '09:00' }  // 默认周一 09:00
 ])
 
 // 新增：创建任务的发送时间数组
 const newTaskSendTimes = ref([
-    { weekday: 1, send_time: '09:00' }  // 默认周一 09:00
+    { _id: Date.now() + 1, weekday: 1, send_time: '09:00' }  // 默认周一 09:00
 ])
 
 // 新增：编辑任务的发送时间数组
 const editTaskSendTimes = ref([
-    { weekday: 1, send_time: '09:00' }  // 默认周一 09:00
+    { _id: Date.now() + 2, weekday: 1, send_time: '09:00' }  // 默认周一 09:00
 ])
 
 // 添加发送时间
 function addSendTime(isEdit = false) {
     const targetArray = isEdit ? editTaskSendTimes : newTaskSendTimes;
     targetArray.value.push({
+        _id: Date.now() + Math.random(), // 添加唯一ID作为key
         weekday: 1,
         send_time: '09:00'
     })
@@ -942,7 +943,21 @@ function addSendTime(isEdit = false) {
 // 删除发送时间
 function removeSendTime(index: number, isEdit = false) {
     const targetArray = isEdit ? editTaskSendTimes : newTaskSendTimes;
-    targetArray.value = targetArray.value.filter((_, i) => i !== index);
+    
+    // 检查是否只剩一个发送时间
+    if (targetArray.value.length <= 1) {
+        alert('至少需要保留一个发送时间！')
+        return
+    }
+    
+    // 确认删除操作
+    const time = targetArray.value[index]
+    const confirmMsg = `确定要删除发送时间 "${getWeekdayText(time.weekday)} ${time.send_time}" 吗？`
+    
+    if (confirm(confirmMsg)) {
+        targetArray.value = targetArray.value.filter((_, i) => i !== index);
+        console.log(`[删除发送时间] 已删除第 ${index + 1} 个发送时间，剩余 ${targetArray.value.length} 个`)
+    }
 }
 
 // 获取星期几的文字描述
@@ -1986,11 +2001,12 @@ function editTask(task) {
   // 设置发送时间
   if (Array.isArray(task.send_times) && task.send_times.length > 0) {
     editTaskSendTimes.value = task.send_times.map(time => ({
+      _id: Date.now() + Math.random(), // 添加唯一ID
       weekday: time.weekday,
       send_time: time.send_time
     }))
   } else {
-    editTaskSendTimes.value = [{ weekday: 1, send_time: '09:00' }]
+    editTaskSendTimes.value = [{ _id: Date.now(), weekday: 1, send_time: '09:00' }]
   }
   
   // 加载每个 PromQL 的独立配置
