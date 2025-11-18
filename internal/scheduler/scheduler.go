@@ -619,10 +619,30 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	log.Printf("[TaskQueue] 找到 %d 个webhook配置", len(webhooks))
 	log.Printf("[TaskQueue] 推送模式: %s", pushMode)
 
-	// 根据 push_mode 选择不同的数据获取和发送逻辑
-	if pushMode == "text" {
+	// 解析推送模式，支持混合模式（如 "chart,text"）
+	pushModes := strings.Split(pushMode, ",")
+	hasChartMode := false
+	hasTextMode := false
+	for _, mode := range pushModes {
+		mode = strings.TrimSpace(mode)
+		if mode == "chart" {
+			hasChartMode = true
+		} else if mode == "text" {
+			hasTextMode = true
+		}
+	}
+
+	// 如果没有明确指定模式，默认为图表模式
+	if !hasChartMode && !hasTextMode {
+		hasChartMode = true
+	}
+
+	log.Printf("[TaskQueue] 推送模式解析结果: 图表模式=%v, 文本模式=%v", hasChartMode, hasTextMode)
+
+	// 文本模式推送逻辑
+	if hasTextMode {
 		// 文本模式：获取每个 PromQL 的最新值
-		log.Printf("[TaskQueue] 使用文本模式，获取最新指标值")
+		log.Printf("[TaskQueue] 执行文本模式推送，获取最新指标值")
 
 	// 为每个 PromQL 获取最新值
 	promqlMetrics := make(map[string][]service.LatestMetric)
@@ -714,12 +734,14 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			webhookMutex.Unlock()
 		}
 
-		log.Printf("[TaskQueue] 任务完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
+		log.Printf("[TaskQueue] 文本模式推送完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
 			len(webhooks), sentCount, skippedCount)
+	}
 
-	} else {
+	// 图表模式推送逻辑
+	if hasChartMode {
 		// 图表模式：获取时间序列数据
-		log.Printf("[TaskQueue] 使用图表模式，获取时间序列数据")
+		log.Printf("[TaskQueue] 执行图表模式推送，获取时间序列数据")
 
 		var allDataPoints []models.QueryDataPoints
 		seenSeries := make(map[string]bool) // 用于系列去重
@@ -820,11 +842,11 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			webhookMutex.Unlock()
 		}
 
-		log.Printf("[TaskQueue] 任务完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
+		log.Printf("[TaskQueue] 图表模式推送完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
 			len(webhooks), sentCount, skippedCount)
 	}
 
-	log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 =====\n", taskID)
+	log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 (图表模式: %v, 文本模式: %v) =====\n", taskID, hasChartMode, hasTextMode)
 	return nil
 }
 

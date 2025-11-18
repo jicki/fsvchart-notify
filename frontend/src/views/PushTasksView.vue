@@ -127,15 +127,15 @@
         <label>推送模式:</label>
         <div class="push-mode-selection">
           <label>
-            <input type="radio" v-model="newTaskPushMode" value="chart" />
+            <input type="checkbox" v-model="newTaskPushModeChart" />
             图表模式
           </label>
           <label>
-            <input type="radio" v-model="newTaskPushMode" value="text" />
+            <input type="checkbox" v-model="newTaskPushModeText" />
             文本模式
           </label>
         </div>
-        <small>图表模式：显示时间序列图表；文本模式：仅显示最新值</small>
+        <small>可同时选择图表和文本模式。图表模式：显示时间序列图表；文本模式：显示最新值</small>
       </div>
 
       <div class="form-group">
@@ -375,15 +375,15 @@
         <label>推送模式:</label>
         <div class="push-mode-selection">
           <label>
-            <input type="radio" v-model="editTaskPushMode" value="chart" />
+            <input type="checkbox" v-model="editTaskPushModeChart" />
             图表模式
           </label>
           <label>
-            <input type="radio" v-model="editTaskPushMode" value="text" />
+            <input type="checkbox" v-model="editTaskPushModeText" />
             文本模式
           </label>
         </div>
-        <small>图表模式：显示时间序列图表；文本模式：仅显示最新值</small>
+        <small>可同时选择图表和文本模式。图表模式：显示时间序列图表；文本模式：显示最新值</small>
       </div>
       
       <div class="form-group">
@@ -630,9 +630,17 @@
             <td>{{ task.name }}</td>
             <td>{{ getSourceName(task.source_id) }}</td>
             <td>
-              <span :class="['push-mode-badge', task.push_mode || 'chart']">
-                {{ task.push_mode === 'text' ? '文本模式' : '图表模式' }}
-              </span>
+              <div class="push-mode-badges">
+                <span v-if="task.push_mode && task.push_mode.includes('chart')" class="push-mode-badge chart">
+                  图表模式
+                </span>
+                <span v-if="task.push_mode && task.push_mode.includes('text')" class="push-mode-badge text">
+                  文本模式
+                </span>
+                <span v-if="!task.push_mode || task.push_mode === ''" class="push-mode-badge chart">
+                  图表模式
+                </span>
+              </div>
             </td>
             <td>{{ formatTimeRange(task.time_range) }}</td>
             <td>
@@ -799,7 +807,8 @@ const selectedPromQLs = ref([])
 const newTaskButtonText = ref('')
 const newTaskButtonURL = ref('')
 const newTaskShowDataLabel = ref(false) // 添加新的配置项
-const newTaskPushMode = ref('chart') // 添加推送模式，默认为图表模式
+const newTaskPushModeChart = ref(true) // 图表模式复选框，默认选中
+const newTaskPushModeText = ref(false) // 文本模式复选框，默认不选中
 
 // 每个 PromQL 的独立配置
 const promqlConfigs = ref<Record<number, {
@@ -837,7 +846,8 @@ const editPromqlConfigs = ref<Record<number, {
   custom_metric_label: string
 }>>({})
 const editTaskShowDataLabel = ref(false)
-const editTaskPushMode = ref('chart')
+const editTaskPushModeChart = ref(true) // 编辑时的图表模式复选框
+const editTaskPushModeText = ref(false) // 编辑时的文本模式复选框
 
 // 监听 selectedPromQLs 的变化，自动初始化配置并展开
 watch(selectedPromQLs, (newVal, oldVal) => {
@@ -1497,7 +1507,8 @@ function resetEditForm() {
   editTaskButtonText.value = ''
   editTaskButtonURL.value = ''
   editTaskShowDataLabel.value = false // 添加新的配置项
-  editTaskPushMode.value = 'chart' // 重置推送模式
+  editTaskPushModeChart.value = true // 重置推送模式
+  editTaskPushModeText.value = false
   editPromqlConfigs.value = {} // 重置 PromQL 配置
   editTaskSendTimes.value = [{ weekday: 1, send_time: '09:00' }]
 }
@@ -1773,6 +1784,12 @@ async function updateTask() {
     
     console.log('[任务更新] PromQL 配置列表:', promqlConfigsList)
     
+    // 构建推送模式字符串
+    const pushModes = []
+    if (editTaskPushModeChart.value) pushModes.push('chart')
+    if (editTaskPushModeText.value) pushModes.push('text')
+    const pushMode = pushModes.length > 0 ? pushModes.join(',') : 'chart'
+    
     const payload = {
       id: editingTaskId.value,
       name: editTaskName.value,
@@ -1795,7 +1812,7 @@ async function updateTask() {
       button_text: editTaskButtonText.value,
       button_url: editTaskButtonURL.value,
       show_data_label: editTaskShowDataLabel.value,
-      push_mode: editTaskPushMode.value, // 添加推送模式
+      push_mode: pushMode, // 添加推送模式，支持多选
       enabled: 1,
       send_times: editTaskSendTimes.value.map(time => ({
         weekday: parseInt(time.weekday),
@@ -1996,7 +2013,11 @@ function editTask(task) {
   editTaskButtonText.value = task.button_text || ''
   editTaskButtonURL.value = task.button_url || ''
   editTaskShowDataLabel.value = task.show_data_label || false
-  editTaskPushMode.value = task.push_mode || 'chart' // 加载推送模式
+  
+  // 加载推送模式，支持混合模式
+  const pushMode = task.push_mode || 'chart'
+  editTaskPushModeChart.value = pushMode.includes('chart')
+  editTaskPushModeText.value = pushMode.includes('text')
   
   // 设置发送时间
   if (Array.isArray(task.send_times) && task.send_times.length > 0) {
@@ -2077,9 +2098,15 @@ async function addPushTask() {
       alert('请至少设置一个发送时间')
       return
     }
-    // 只在图表模式下才需要选择图表模板
-    if (newTaskPushMode.value === 'chart' && !newTaskChartTemplateId.value) {
-      alert('请选择图表模板')
+    // 检查是否至少选择了一种推送模式
+    if (!newTaskPushModeChart.value && !newTaskPushModeText.value) {
+      alert('请至少选择一种推送模式')
+      return
+    }
+    
+    // 只在选择了图表模式时才需要选择图表模板
+    if (newTaskPushModeChart.value && !newTaskChartTemplateId.value) {
+      alert('选择了图表模式，请选择图表模板')
       return
     }
 
@@ -2106,6 +2133,12 @@ async function addPushTask() {
     
     console.log('[创建任务] PromQL 配置列表:', promqlConfigsList)
 
+    // 构建推送模式字符串
+    const pushModes = []
+    if (newTaskPushModeChart.value) pushModes.push('chart')
+    if (newTaskPushModeText.value) pushModes.push('text')
+    const pushMode = pushModes.length > 0 ? pushModes.join(',') : 'chart'
+
     // 构建请求数据
     const payload = {
       name: newTaskName.value,
@@ -2128,7 +2161,7 @@ async function addPushTask() {
       button_text: newTaskButtonText.value,
       button_url: newTaskButtonURL.value,
       show_data_label: newTaskShowDataLabel.value,
-      push_mode: newTaskPushMode.value, // 新增：推送模式
+      push_mode: pushMode, // 新增：推送模式，支持多选
       enabled: 1,
       send_times: newTaskSendTimes.value.map(time => ({
         weekday: parseInt(time.weekday),
@@ -2207,7 +2240,8 @@ async function addPushTask() {
     newTaskMetricLabel.value = 'pod'
     newTaskCustomMetricLabel.value = ''
     newTaskUnit.value = ''
-    newTaskPushMode.value = 'chart' // 重置推送模式
+    newTaskPushModeChart.value = true // 重置推送模式
+    newTaskPushModeText.value = false
     promqlConfigs.value = {} // 重置 PromQL 配置
     newTaskWebhookIds.value = []
     selectedPromQLs.value = []
@@ -3403,6 +3437,32 @@ tr.editing-task {
 .no-times {
     font-style: italic;
     color: #999;
+}
+
+.push-mode-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.push-mode-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.push-mode-badge.chart {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #90caf9;
+}
+
+.push-mode-badge.text {
+  background-color: #f3e5f5;
+  color: #7b1fa2;
+  border: 1px solid #ce93d8;
 }
 
 .error-message {
