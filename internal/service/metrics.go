@@ -276,7 +276,7 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		step = 8 * time.Hour
 		log.Printf("[FetchMetrics] Using 8h step to ensure 3 points per day")
 
-		// 生成每天的时间点列表
+		// 生成每天的时间点列表，但不包含未来时间点
 		var timePoints []time.Time
 		currentTime := alignedStart
 		for currentTime.Before(alignedEnd) || currentTime.Equal(alignedEnd) {
@@ -286,9 +286,18 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 				0, 0, 0, 0, currentTime.Location(),
 			)
 
-			timePoints = append(timePoints, dayStart)                   // 00:00
-			timePoints = append(timePoints, dayStart.Add(8*time.Hour))  // 08:00
-			timePoints = append(timePoints, dayStart.Add(16*time.Hour)) // 16:00
+			// 只添加不晚于当前时间的时间点
+			if !dayStart.After(alignedEnd) {
+				timePoints = append(timePoints, dayStart) // 00:00
+			}
+			eightAM := dayStart.Add(8 * time.Hour)
+			if !eightAM.After(alignedEnd) {
+				timePoints = append(timePoints, eightAM) // 08:00
+			}
+			fourPM := dayStart.Add(16 * time.Hour)
+			if !fourPM.After(alignedEnd) {
+				timePoints = append(timePoints, fourPM) // 16:00
+			}
 
 			// 移动到下一天
 			currentTime = currentTime.AddDate(0, 0, 1)
