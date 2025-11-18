@@ -362,6 +362,7 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 	for i := range seriesNames {
 		seriesConfig := map[string]interface{}{
 			"type":        elem.ChartType,
+			"stack":       false, // 禁用堆叠，确保柱状图独立显示
 			"dataIndex":   i,
 			"seriesField": "name",
 			"xField":      "x",
@@ -387,6 +388,16 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 		chartSeries = append(chartSeries, seriesConfig)
 	}
 
+	// 构建Y轴标签格式化器（显示单位）
+	yAxisLabelFormatter := "{label}"
+	if elem.ChartData.Unit != "" {
+		if elem.ChartData.Unit == "%" {
+			yAxisLabelFormatter = "{label}%"
+		} else {
+			yAxisLabelFormatter = "{label}" + elem.ChartData.Unit
+		}
+	}
+
 	// 使用飞书官方标准图表格式
 	chartElement := map[string]interface{}{
 		"tag": "chart",
@@ -405,7 +416,8 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 				{
 					"orient": "left",
 					"label": map[string]interface{}{
-						"visible": true,
+						"visible":  true,
+						"formatter": yAxisLabelFormatter, // 添加单位显示
 					},
 				},
 			},
