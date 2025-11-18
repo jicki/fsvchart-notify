@@ -44,14 +44,32 @@ func SendFeishuHybridCard(webhookURL string, hybridElements []HybridElement, car
 	log.Printf("[SendFeishuHybridCard] Webhook: %s, CardTitle: %s", webhookURL, cardTitle)
 	log.Printf("[SendFeishuHybridCard] 混合元素数量: %d", len(hybridElements))
 
-	// 按 display_order 排序
+	// 优化排序：文本模式在上，图表模式在下，各自按 display_order 排序
 	sort.Slice(hybridElements, func(i, j int) bool {
+		// 先按类型分组：text < chart
+		if hybridElements[i].DisplayMode != hybridElements[j].DisplayMode {
+			// text 模式排在前面
+			if hybridElements[i].DisplayMode == "text" {
+				return true
+			}
+			if hybridElements[j].DisplayMode == "text" {
+				return false
+			}
+		}
+		
+		// 同类型内按 display_order 排序
 		if hybridElements[i].DisplayOrder != hybridElements[j].DisplayOrder {
 			return hybridElements[i].DisplayOrder < hybridElements[j].DisplayOrder
 		}
+		
 		// display_order 相同时，按名称排序
 		return hybridElements[i].PromQLName < hybridElements[j].PromQLName
 	})
+
+	log.Printf("[SendFeishuHybridCard] 排序后顺序:")
+	for idx, elem := range hybridElements {
+		log.Printf("  %d. [%s] %s (order=%d)", idx+1, elem.DisplayMode, elem.PromQLName, elem.DisplayOrder)
+	}
 
 	// 创建一个卡片
 	cardData := map[string]interface{}{
@@ -99,9 +117,21 @@ func SendFeishuHybridCard(webhookURL string, hybridElements []HybridElement, car
 
 	log.Printf("[SendFeishuHybridCard] 是否多天数据: %v", isMultiDayData)
 
-	// 按顺序添加元素
+	// 按顺序添加元素，并在文本和图表之间添加额外分隔
+	var lastMode string
 	for idx, elem := range hybridElements {
 		log.Printf("[SendFeishuHybridCard] 处理元素 %d: %s (mode=%s, order=%d)", idx+1, elem.PromQLName, elem.DisplayMode, elem.DisplayOrder)
+
+		// 如果从文本模式切换到图表模式，添加分组标题
+		if lastMode == "text" && elem.DisplayMode == "chart" {
+			elements = append(elements, map[string]interface{}{
+				"tag": "hr",
+			})
+			elements = append(elements, map[string]interface{}{
+				"tag":     "markdown",
+				"content": "**图表数据**",
+			})
+		}
 
 		if elem.DisplayMode == "text" {
 			// 添加文本元素
@@ -111,12 +141,18 @@ func SendFeishuHybridCard(webhookURL string, hybridElements []HybridElement, car
 			elements = appendChartElements(elements, elem, isMultiDayData)
 		}
 
-		// 在元素之间添加分隔线（除了最后一个）
+		// 在同类型元素之间添加小分隔线
 		if idx < len(hybridElements)-1 {
-			elements = append(elements, map[string]interface{}{
-				"tag": "hr",
-			})
+			nextMode := hybridElements[idx+1].DisplayMode
+			// 只在同类型之间添加分隔线
+			if elem.DisplayMode == nextMode {
+				elements = append(elements, map[string]interface{}{
+					"tag": "hr",
+				})
+			}
 		}
+
+		lastMode = elem.DisplayMode
 	}
 
 	// 添加底部分隔线
