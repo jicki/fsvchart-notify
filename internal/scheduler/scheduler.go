@@ -681,6 +681,10 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			if mode == "chart" || mode == "both" {
 				// 获取图表数据
 				log.Printf("[TaskQueue] 获取图表数据: %s", query.Query)
+				log.Printf("[TaskQueue] 查询时间范围: start=%s, end=%s, step=%ds", 
+					start.Format("2006-01-02 15:04:05"), 
+					end.Format("2006-01-02 15:04:05"), 
+					step)
 				
 				// 获取图表类型
 				var chartType string

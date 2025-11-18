@@ -258,10 +258,10 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		durationDays := int(math.Ceil(duration.Hours() / 24))
 		log.Printf("[FetchMetrics] Query spans %d days", durationDays)
 
-		// 计算结束时间：当前时间向前对齐到最近的8小时
+		// 使用当前时间作为结束时间，不进行截断，确保获取最新数据
 		now := time.Now()
-		alignedEnd = now.Truncate(8 * time.Hour)
-		log.Printf("[FetchMetrics] Aligned end time: %s", alignedEnd.Format("2006-01-02 15:04:05"))
+		alignedEnd = now
+		log.Printf("[FetchMetrics] Using current time as end: %s", alignedEnd.Format("2006-01-02 15:04:05"))
 
 		// 计算开始时间：从结束时间向前推指定天数
 		alignedStart = alignedEnd.AddDate(0, 0, -durationDays)
@@ -294,13 +294,20 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			currentTime = currentTime.AddDate(0, 0, 1)
 		}
 
+		// 确保包含当前时间点（最新数据）
+		// 如果最后一个时间点早于当前时间，添加当前时间
+		if len(timePoints) > 0 && timePoints[len(timePoints)-1].Before(alignedEnd) {
+			timePoints = append(timePoints, alignedEnd)
+			log.Printf("[FetchMetrics] Added current time point: %s", alignedEnd.Format("2006-01-02 15:04:05"))
+		}
+
 		// 记录生成的时间点
 		log.Printf("[FetchMetrics] Generated %d time points:", len(timePoints))
 		for i, tp := range timePoints {
 			log.Printf("  Point %d: %s", i+1, tp.Format("2006-01-02 15:04:05"))
 		}
 
-		// 更新查询参数
+		// 更新查询参数 - 使用第一个和最后一个时间点
 		alignedStart = timePoints[0]
 		if len(timePoints) > 0 {
 			alignedEnd = timePoints[len(timePoints)-1]
