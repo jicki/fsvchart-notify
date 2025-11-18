@@ -586,7 +586,19 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	duration := parseDurationString(timeRange)
 	end := time.Now()
 	start := end.Add(-duration)
-	log.Printf("[TaskQueue] 查询时间范围: %s 至 %s", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
+	
+	// 如果 step 为 0 或太小（< 1 秒），根据 duration 自动计算最优 step
+	if step < 1 {
+		calculatedStep := service.GetDurationStep(duration)
+		step = calculatedStep.Seconds()
+		log.Printf("[TaskQueue] Step 为 0 或太小，根据时间范围 %s 自动计算: %v (%.0f 秒)", 
+			timeRange, calculatedStep, step)
+	}
+	
+	log.Printf("[TaskQueue] 查询时间范围: start=%s, end=%s, step=%ds",
+		start.Format("2006-01-02 15:04:05"),
+		end.Format("2006-01-02 15:04:05"),
+		int64(step))
 
 	// 获取所有绑定的webhook
 	webhookRows, err := db.Query(`
