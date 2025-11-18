@@ -237,14 +237,14 @@
       
       <div class="form-group">
         <label>时间范围:</label>
-        <div class="time-range-inputs">
-          <input type="number" v-model="newTaskTimeRangeValue" min="1" />
-          <select v-model="newTaskTimeRangeUnit">
-            <option value="h">小时</option>
-            <option value="d">天</option>
-            <option value="M">月</option>
-          </select>
-        </div>
+        <select v-model="newTaskTimeRange" class="time-range-select">
+          <option value="1d">1 天</option>
+          <option value="5d">5 天</option>
+          <option value="7d">7 天</option>
+          <option value="15d">15 天</option>
+          <option value="30d">30 天</option>
+        </select>
+        <div class="form-hint">数据点已针对每个时间范围优化，确保图表清晰</div>
       </div>
       
       <div class="form-group">
@@ -483,14 +483,14 @@
       
       <div class="form-group">
         <label>时间范围:</label>
-        <div class="time-range-inputs">
-          <input type="number" v-model="editTaskTimeRangeValue" min="1" />
-          <select v-model="editTaskTimeRangeUnit">
-            <option value="h">小时</option>
-            <option value="d">天</option>
-            <option value="M">月</option>
-          </select>
-        </div>
+        <select v-model="editTaskTimeRange" class="time-range-select">
+          <option value="1d">1 天</option>
+          <option value="5d">5 天</option>
+          <option value="7d">7 天</option>
+          <option value="15d">15 天</option>
+          <option value="30d">30 天</option>
+        </select>
+        <div class="form-hint">数据点已针对每个时间范围优化，确保图表清晰</div>
       </div>
       
       <div class="form-group">
@@ -779,8 +779,7 @@ function getMockData() {
 // 新建任务表单
 const newTaskName = ref('')
 const newTaskSourceId = ref('')
-const newTaskTimeRangeValue = ref('30')
-const newTaskTimeRangeUnit = ref('m')
+const newTaskTimeRange = ref('7d') // 默认 7 天
 const newTaskChartTemplateId = ref('')
 const newTaskCardTitle = ref('')
 const newTaskCardTemplate = ref('blue')
@@ -812,8 +811,7 @@ const isEditing = ref(false)
 const editingTaskId = ref<number | null>(null)
 const editTaskName = ref('')
 const editTaskSourceId = ref('')
-const editTaskTimeRangeValue = ref(1)
-const editTaskTimeRangeUnit = ref('h')
+const editTaskTimeRange = ref('7d') // 默认 7 天
 const editTaskChartTemplateId = ref('')
 const editTaskCardTitle = ref('')
 const editTaskCardTemplate = ref('red')
@@ -1483,8 +1481,7 @@ function resetEditForm() {
   editingTaskId.value = null
   editTaskName.value = ''
   editTaskSourceId.value = ''
-  editTaskTimeRangeValue.value = 1
-  editTaskTimeRangeUnit.value = 'h'
+  editTaskTimeRange.value = '7d' // 默认 7 天
   editTaskChartTemplateId.value = ''
   editTaskCardTitle.value = ''
   editTaskCardTemplate.value = 'red'
@@ -1784,8 +1781,8 @@ async function updateTask() {
         const promql = promqls.value.find(p => p.id.toString() === id)
         return promql ? promql.query : ''
       }).filter(q => q).join(', '),
-      time_range: `${editTaskTimeRangeValue.value}${editTaskTimeRangeUnit.value}`,
-      step: calculateStep(editTaskTimeRangeValue.value, editTaskTimeRangeUnit.value),
+      time_range: editTaskTimeRange.value,
+      step: 0, // step 由后端根据 time_range 自动计算
       chart_template_id: parseInt(editTaskChartTemplateId.value),
       webhook_ids: editTaskWebhookIds.value.map(id => parseInt(id)),
       card_title: editTaskCardTitle.value,
@@ -1970,12 +1967,8 @@ function editTask(task) {
   editTaskName.value = task.name
   editTaskSourceId.value = task.source_id.toString()
   
-  // 解析时间范围
-  const timeRangeMatch = task.time_range.match(/^(\d+)([hHdDmM])$/)
-  if (timeRangeMatch) {
-    editTaskTimeRangeValue.value = parseInt(timeRangeMatch[1])
-    editTaskTimeRangeUnit.value = timeRangeMatch[2].toLowerCase()
-  }
+  // 设置时间范围（直接使用，如 "7d"、"15d"）
+  editTaskTimeRange.value = task.time_range || '7d'
   
   // 确保图表模板ID被正确设置
   if (task.chart_template_id) {
@@ -2122,8 +2115,8 @@ async function addPushTask() {
         const promql = promqls.value.find(p => p.id.toString() === id)
         return promql ? promql.query : ''
       }).filter(q => q).join(', '),
-      time_range: `${newTaskTimeRangeValue.value}${newTaskTimeRangeUnit.value}`,
-      step: calculateStep(newTaskTimeRangeValue.value, newTaskTimeRangeUnit.value),
+      time_range: newTaskTimeRange.value,
+      step: 0, // step 由后端根据 time_range 自动计算
       chart_template_id: parseInt(newTaskChartTemplateId.value) || null, // 确保不会变成0
       webhook_ids: newTaskWebhookIds.value.map(id => parseInt(id)),
       card_title: newTaskCardTitle.value,
@@ -2149,7 +2142,7 @@ async function addPushTask() {
     console.log('[创建任务] 开始创建任务...')
     console.log('[创建任务] 任务名称:', newTaskName.value)
     console.log('[创建任务] 发送时间:', newTaskSendTimes.value.map(t => `${getWeekdayText(t.weekday)} ${t.send_time}`).join(', '))
-    console.log('[创建任务] 时间范围:', `${newTaskTimeRangeValue.value}${newTaskTimeRangeUnit.value}`)
+    console.log('[创建任务] 时间范围:', newTaskTimeRange.value)
     console.log('[创建任务] 图表模板ID:', newTaskChartTemplateId.value)
     console.log('[创建任务] PromQL IDs:', selectedPromQLs.value)
     console.log('[创建任务] 图表模板关联:', payload.promql_chart_templates)
@@ -2204,8 +2197,7 @@ async function addPushTask() {
     // 重置表单
     newTaskName.value = ''
     newTaskSourceId.value = ''
-    newTaskTimeRangeValue.value = '30'
-    newTaskTimeRangeUnit.value = 'm'
+    newTaskTimeRange.value = '7d' // 默认 7 天
     newTaskChartTemplateId.value = ''
     newTaskCardTitle.value = ''
     newTaskCardTemplate.value = 'blue'
@@ -2602,6 +2594,26 @@ th,td {
 
 .time-range-inputs input {
   width: 80px;
+}
+
+.time-range-select {
+  width: 200px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.time-range-select:hover {
+  border-color: #4CAF50;
+}
+
+.time-range-select:focus {
+  outline: none;
+  border-color: #4CAF50;
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
 }
 
 .create-btn {

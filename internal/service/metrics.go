@@ -265,7 +265,7 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 	if duration.Hours() > 24 {
 		// 计算天数（向上取整）
 		durationDays := int(math.Ceil(duration.Hours() / 24))
-		log.Printf("[FetchMetrics] Query spans %d days", durationDays)
+		log.Printf("[FetchMetrics] Query spans %d days, using calculated step: %v", durationDays, step)
 
 		// 使用当前时间作为结束时间，不进行截断，确保获取最新数据
 		now := time.Now()
@@ -280,52 +280,7 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			0, 0, 0, 0, alignedStart.Location(),
 		)
 		log.Printf("[FetchMetrics] Aligned start time: %s", alignedStart.Format("2006-01-02 15:04:05"))
-
-		// 固定使用8小时步长，确保每天有3个点 (00:00, 08:00, 16:00)
-		step = 8 * time.Hour
-		log.Printf("[FetchMetrics] Using 8h step to ensure 3 points per day")
-
-		// 生成每天的时间点列表，但不包含未来时间点
-		var timePoints []time.Time
-		currentTime := alignedStart
-		for currentTime.Before(alignedEnd) || currentTime.Equal(alignedEnd) {
-			// 为每天生成3个固定时间点
-			dayStart := time.Date(
-				currentTime.Year(), currentTime.Month(), currentTime.Day(),
-				0, 0, 0, 0, currentTime.Location(),
-			)
-
-			// 只添加不晚于当前时间的时间点
-			if !dayStart.After(alignedEnd) {
-				timePoints = append(timePoints, dayStart) // 00:00
-			}
-			eightAM := dayStart.Add(8 * time.Hour)
-			if !eightAM.After(alignedEnd) {
-				timePoints = append(timePoints, eightAM) // 08:00
-			}
-			fourPM := dayStart.Add(16 * time.Hour)
-			if !fourPM.After(alignedEnd) {
-				timePoints = append(timePoints, fourPM) // 16:00
-			}
-
-			// 移动到下一天
-			currentTime = currentTime.AddDate(0, 0, 1)
-		}
-
-		// 记录生成的时间点
-		log.Printf("[FetchMetrics] Generated %d time points:", len(timePoints))
-		for i, tp := range timePoints {
-			log.Printf("  Point %d: %s", i+1, tp.Format("2006-01-02 15:04:05"))
-		}
-
-		// 更新查询参数
-		// 开始时间使用第一个时间点
-		// 结束时间使用当前时间（alignedEnd），这样 Prometheus 会返回到当前时间为止的所有 8 小时整点数据
-		alignedStart = timePoints[0]
-		// alignedEnd 保持为当前时间，不需要修改
-		log.Printf("[FetchMetrics] Query will use start=%s, end=%s (current time)", 
-			alignedStart.Format("2006-01-02 15:04:05"), 
-			alignedEnd.Format("2006-01-02 15:04:05"))
+		log.Printf("[FetchMetrics] Expected data points: %.1f", duration.Hours()/step.Hours())
 	} else {
 		// 对于小于一天的查询，使用常规对齐
 		alignedStart = start.Truncate(step)
