@@ -626,7 +626,141 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	log.Printf("[TaskQueue] 找到 %d 个webhook配置", len(webhooks))
 	log.Printf("[TaskQueue] 使用 PromQL 级别的展示模式配置")
 
-	// 按 PromQL 的 display_mode 分组数据
+	// 检查是否需要使用混合卡片
+	needHybridCard := false
+	for _, query := range uniqueQueries {
+		if query.DisplayMode == "both" {
+			needHybridCard = true
+			break
+		}
+	}
+
+	log.Printf("[TaskQueue] 是否使用混合卡片: %v", needHybridCard)
+
+	// 如果需要混合卡片，构建混合元素列表
+	if needHybridCard {
+		var hybridElements []service.HybridElement
+
+		for _, query := range uniqueQueries {
+			mode := query.DisplayMode
+			if mode == "" {
+				mode = "chart" // 默认为图表模式
+			}
+
+			promqlName := query.PromQLName
+			if promqlName == "" {
+				promqlName = "查询"
+			}
+
+			// 确定使用哪个标签
+			queryMetricLabel := query.MetricLabel
+			queryCustomLabel := query.CustomMetricLabel
+			if queryMetricLabel == "" {
+				queryMetricLabel = metricLabel
+			}
+
+			if mode == "text" || mode == "both" {
+				// 获取文本数据
+				log.Printf("[TaskQueue] 获取文本数据: %s", query.Query)
+				latestMetrics, err := service.FetchLatestMetrics(sourceURL, query.Query, queryMetricLabel, queryCustomLabel, query.InitialUnit, query.Unit)
+				if err != nil {
+					log.Printf("[TaskQueue] 获取最新指标值失败: %v", err)
+				} else {
+					hybridElements = append(hybridElements, service.HybridElement{
+						DisplayOrder: query.DisplayOrder,
+						DisplayMode:  "text",
+						PromQLName:   promqlName,
+						TextMetrics:  latestMetrics,
+						Unit:         query.Unit,
+						MetricLabel:  queryMetricLabel,
+					})
+					log.Printf("[TaskQueue] 添加文本元素: %s (order=%d)", promqlName, query.DisplayOrder)
+				}
+			}
+
+			if mode == "chart" || mode == "both" {
+				// 获取图表数据
+				log.Printf("[TaskQueue] 获取图表数据: %s", query.Query)
+				
+				// 获取图表类型
+				var chartType string
+				err := db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)
+				if err != nil {
+					log.Printf("[TaskQueue] 获取图表类型失败 (ID=%d): %v，使用默认类型 'area'", query.ChartTemplateID, err)
+					chartType = "area"
+				}
+				chartType = service.GetSupportedChartType(chartType)
+
+				// 获取数据点
+				dataPoints, err := service.FetchMetrics(sourceURL, query.Query, start, end, time.Duration(step)*time.Second, queryMetricLabel, queryCustomLabel, query.InitialUnit, query.Unit)
+				if err != nil {
+					log.Printf("[TaskQueue] 获取指标数据失败: %v", err)
+				} else {
+					hybridElements = append(hybridElements, service.HybridElement{
+						DisplayOrder: query.DisplayOrder,
+						DisplayMode:  "chart",
+						PromQLName:   promqlName,
+						ChartData: &models.QueryDataPoints{
+							DataPoints: dataPoints,
+							ChartType:  chartType,
+							ChartTitle: promqlName,
+							Unit:       query.Unit,
+						},
+						ChartType:     chartType,
+						ShowDataLabel: showDataLabel.Int64 == 1,
+					})
+					log.Printf("[TaskQueue] 添加图表元素: %s (order=%d, points=%d)", promqlName, query.DisplayOrder, len(dataPoints))
+				}
+			}
+		}
+
+		if len(hybridElements) == 0 {
+			log.Printf("[TaskQueue] 未获取到任何混合元素，任务终止")
+			return nil
+		}
+
+		log.Printf("[TaskQueue] 共收集到 %d 个混合元素", len(hybridElements))
+
+		// 发送混合卡片到所有 webhook
+		sentWebhooks := make(map[string]bool)
+		sentCount := 0
+		skippedCount := 0
+
+		for _, webhook := range webhooks {
+			if sentWebhooks[webhook.URL] {
+				log.Printf("[TaskQueue] 跳过重复的webhook URL: %s", webhook.URL)
+				skippedCount++
+				continue
+			}
+
+			log.Printf("[TaskQueue] 发送混合卡片到webhook (ID=%d)", webhook.ID)
+
+			webhookMutex := getWebhookMutex(webhook.ID)
+			webhookMutex.Lock()
+
+			err = service.SendFeishuHybridCard(webhook.URL, hybridElements, cardTitle, cardTemplate,
+				unit, buttonText, buttonURL, showDataLabel.Int64 == 1)
+
+			if err != nil {
+				log.Printf("[TaskQueue] 发送失败: %v", err)
+				insertPushStatus(db, sourceID, webhook.ID, err)
+			} else {
+				sentCount++
+				log.Printf("[TaskQueue] 混合卡片发送成功")
+				insertPushStatus(db, sourceID, webhook.ID, nil)
+				sentWebhooks[webhook.URL] = true
+			}
+
+			webhookMutex.Unlock()
+		}
+
+		log.Printf("[TaskQueue] 混合卡片推送完成: 配置的webhook数: %d, 实际发送: %d, 因重复跳过: %d",
+			len(webhooks), sentCount, skippedCount)
+		log.Printf("[TaskQueue] ===== 任务 ID=%d 执行完成 (混合模式) =====\n", taskID)
+		return nil
+	}
+
+	// 按 PromQL 的 display_mode 分组数据（非混合模式）
 	var chartQueries []struct {
 		Query             string
 		ChartTemplateID   int64
@@ -662,10 +796,6 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		} else if mode == "chart" {
 			// 仅图表模式
 			chartQueries = append(chartQueries, query)
-		} else if mode == "both" {
-			// 混合模式：同时添加到两个列表
-			chartQueries = append(chartQueries, query)
-			textQueries = append(textQueries, query)
 		}
 	}
 
