@@ -6,6 +6,9 @@
 FROM reg.deeproute.ai/deeproute-public/node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/ ./
+# 配置 npm 使用国内镜像源，提高下载速度和稳定性
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm config set network-timeout 60000
 RUN npm install
 RUN npm run build
 # 上一步会生成 dist 目录，在 /app/frontend/dist 下
