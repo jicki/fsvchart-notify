@@ -247,22 +247,26 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 		// 添加无数据提示
 		elements = append(elements, map[string]interface{}{
 			"tag":     "markdown",
-			"content": fmt.Sprintf("**%s** (图表)", elem.PromQLName),
+			"content": fmt.Sprintf("**%s**", elem.PromQLName),
 		})
 		elements = append(elements, map[string]interface{}{
 			"tag":     "markdown",
-			"content": "└─ 暂无数据",
+			"content": "└─ 图表数据: 暂无数据",
 		})
 		return elements
 	}
 
-	// 添加图表标题
+	// 添加图表标题（使用 markdown）
+	titleText := fmt.Sprintf("**%s**", elem.PromQLName)
+	if elem.ChartData.Unit != "" {
+		titleText = fmt.Sprintf("**%s** (%s)", elem.PromQLName, elem.ChartData.Unit)
+	}
 	elements = append(elements, map[string]interface{}{
 		"tag":     "markdown",
-		"content": fmt.Sprintf("**%s** (图表)", elem.PromQLName),
+		"content": titleText,
 	})
 
-	// 处理数据点
+	// 处理数据点 - 按飞书标准图表格式
 	dataPointsMap := make(map[string]map[string]float64) // time -> seriesName -> value
 	allTimes := make(map[string]bool)
 	allSeries := make(map[string]bool)
@@ -293,7 +297,7 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 	}
 	sort.Strings(seriesNames)
 
-	// 构建图表数据
+	// 构建飞书图表数据格式
 	var chartDataPoints []map[string]interface{}
 	for _, t := range times {
 		dataPoint := map[string]interface{}{"time": t}
@@ -311,27 +315,49 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 	var chartSeries []map[string]interface{}
 	for i, series := range seriesNames {
 		seriesConfig := map[string]interface{}{
-			"type":       elem.ChartType,
-			"dataIndex":  i,
+			"type":        elem.ChartType,
+			"dataIndex":   i,
 			"seriesField": series,
-			"xField":     "time",
-			"yField":     series,
+			"xField":      "time",
+			"yField":      series,
 		}
 		if elem.ShowDataLabel {
-			seriesConfig["show_data_label"] = true
+			seriesConfig["label"] = map[string]interface{}{
+				"visible": true,
+			}
 		}
 		chartSeries = append(chartSeries, seriesConfig)
 	}
 
-	// 添加图表元素
-	elements = append(elements, map[string]interface{}{
+	// 使用飞书官方标准图表格式
+	chartElement := map[string]interface{}{
 		"tag":      "chart",
 		"chart_id": "standard_chart",
-		"data": map[string]interface{}{
-			"data":   chartDataPoints,
+		"chart_spec": map[string]interface{}{
+			"chartType": elem.ChartType,
+			"data": []map[string]interface{}{
+				{
+					"name":   "series_data",
+					"values": chartDataPoints,
+				},
+			},
 			"series": chartSeries,
+			"xAxis": []map[string]interface{}{
+				{
+					"field":  "time",
+					"type":   "category",
+					"orient": "bottom",
+				},
+			},
+			"yAxis": []map[string]interface{}{
+				{
+					"orient": "left",
+				},
+			},
 		},
-	})
+	}
+
+	elements = append(elements, chartElement)
 
 	return elements
 }
