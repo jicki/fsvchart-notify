@@ -398,6 +398,16 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 		}
 	}
 
+	// 构建 tooltip 格式化器（显示单位）
+	tooltipFormatter := "{name}: {y}"
+	if elem.ChartData.Unit != "" {
+		if elem.ChartData.Unit == "%" {
+			tooltipFormatter = "{name}: {y}%"
+		} else {
+			tooltipFormatter = "{name}: {y}" + elem.ChartData.Unit
+		}
+	}
+
 	// 使用飞书官方标准图表格式
 	chartElement := map[string]interface{}{
 		"tag": "chart",
@@ -423,6 +433,22 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 			},
 			"legends": map[string]interface{}{
 				"position": "bottom",
+			},
+			"tooltip": map[string]interface{}{
+				"mark": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"valueFormatter": tooltipFormatter,
+						},
+					},
+				},
+				"dimension": map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"valueFormatter": tooltipFormatter,
+						},
+					},
+				},
 			},
 		},
 	}
