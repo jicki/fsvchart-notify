@@ -328,6 +328,10 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 			}
 		}
 
+		// 计算时间跨度（小时）
+		timeSpanHours := float64(maxTime-minTime) / 3600.0
+		isMultiDay := timeSpanHours > 24
+
 		// 确定时间间隔
 		interval := int64(8 * 3600) // 默认8小时
 		for _, points := range typeGroups {
@@ -346,28 +350,41 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 			}
 		}
 
+		log.Printf("[SendFeishuStandardChart] 时间跨度: %.1f 小时, 是否多天: %v, 时间间隔: %d 秒",
+			timeSpanHours, isMultiDay, interval)
+
 		// 处理每个类型的数据点
 		var processedPoints []models.DataPoint
 		for seriesType, points := range typeGroups {
-			// 创建时间点映射
-			timeMap := make(map[int64]models.DataPoint)
-			for _, p := range points {
-				timeMap[p.UnixTime] = p
-			}
-
-			// 补充缺失的时间点
-			for t := minTime; t <= maxTime; t += interval {
-				if dp, exists := timeMap[t]; exists {
-					processedPoints = append(processedPoints, dp)
-				} else {
-					// 补充缺失的点，值设为0
-					processedPoints = append(processedPoints, models.DataPoint{
-						Time:     time.Unix(t, 0).Format("15:04"),
-						UnixTime: t,
-						Value:    0,
-						Type:     seriesType,
-					})
+			if isMultiDay {
+				// 多天查询：不补充缺失的时间点，只使用实际数据点
+				log.Printf("[SendFeishuStandardChart] 多天查询：跳过数据点补全，直接使用 %d 个实际数据点", len(points))
+				processedPoints = append(processedPoints, points...)
+			} else {
+				// 单天查询：补充缺失的时间点以保证图表连续性
+				// 创建时间点映射
+				timeMap := make(map[int64]models.DataPoint)
+				for _, p := range points {
+					timeMap[p.UnixTime] = p
 				}
+
+				// 补充缺失的时间点
+				pointsAdded := 0
+				for t := minTime; t <= maxTime; t += interval {
+					if dp, exists := timeMap[t]; exists {
+						processedPoints = append(processedPoints, dp)
+					} else {
+						// 补充缺失的点，值设为0
+						processedPoints = append(processedPoints, models.DataPoint{
+							Time:     time.Unix(t, 0).Format("15:04"),
+							UnixTime: t,
+							Value:    0,
+							Type:     seriesType,
+						})
+						pointsAdded++
+					}
+				}
+				log.Printf("[SendFeishuStandardChart] 单天查询：补充了 %d 个缺失的时间点", pointsAdded)
 			}
 		}
 
@@ -381,6 +398,7 @@ func SendFeishuStandardChart(webhookURL string, queryDataPoints []models.QueryDa
 
 		// 更新处理后的数据点
 		queryDataPoints[i].DataPoints = processedPoints
+		log.Printf("[SendFeishuStandardChart] 查询 %d 最终数据点数量: %d", i+1, len(processedPoints))
 	}
 
 	// 对数据进行去重
