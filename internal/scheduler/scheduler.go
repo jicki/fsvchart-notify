@@ -438,6 +438,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		CustomMetricLabel string
 		InitialUnit       string
 		DisplayOrder      int
+		DisplayMode       string // chart, text, both
 	}
 
 	// 查询任务的所有查询及其独立配置（按 display_order 排序）
@@ -447,7 +448,8 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		       COALESCE(ptp.metric_label, 'pod') as metric_label,
 		       COALESCE(ptp.custom_metric_label, '') as custom_metric_label,
 		       COALESCE(ptp.initial_unit, '') as initial_unit,
-		       COALESCE(ptp.display_order, 0) as display_order
+		       COALESCE(ptp.display_order, 0) as display_order,
+		       COALESCE(ptp.display_mode, 'chart') as display_mode
 		FROM push_task_promql ptp
 		JOIN promql p ON ptp.promql_id = p.id
 		WHERE ptp.task_id = ?
@@ -471,9 +473,10 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 			CustomMetricLabel string
 			InitialUnit       string
 			DisplayOrder      int
+			DisplayMode       string
 		}
 		if err := rows.Scan(&promqlID, &q.Query, &q.ChartTemplateID, &q.PromQLName,
-			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel, &q.InitialUnit, &q.DisplayOrder); err != nil {
+			&q.Unit, &q.MetricLabel, &q.CustomMetricLabel, &q.InitialUnit, &q.DisplayOrder, &q.DisplayMode); err != nil {
 			log.Printf("[TaskQueue] 扫描PromQL行失败: %v", err)
 			continue
 		}
@@ -482,7 +485,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		if !seenQueries[q.Query] {
 			seenQueries[q.Query] = true
 			uniqueQueries = append(uniqueQueries, q)
-			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s, initial_unit=%s, order=%d)", q.Query, q.Unit, q.MetricLabel, q.InitialUnit, q.DisplayOrder)
+			log.Printf("[TaskQueue] 添加唯一查询: %s (unit=%s, label=%s, mode=%s, order=%d)", q.Query, q.Unit, q.MetricLabel, q.DisplayMode, q.DisplayOrder)
 		} else {
 			log.Printf("[TaskQueue] 跳过重复查询: %s", q.Query)
 		}
@@ -510,6 +513,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 					CustomMetricLabel string
 					InitialUnit       string
 					DisplayOrder      int
+					DisplayMode       string
 				}
 				if err := queryRows.Scan(&q.Query, &q.ChartTemplateID); err != nil {
 					log.Printf("[TaskQueue] 扫描查询行失败: %v", err)
@@ -520,8 +524,9 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				q.Unit = unit
 				q.MetricLabel = metricLabel
 				q.CustomMetricLabel = customMetricLabel
-				q.InitialUnit = ""  // 旧格式没有 initial_unit
-				q.DisplayOrder = 0  // 旧格式没有 display_order
+				q.InitialUnit = ""      // 旧格式没有 initial_unit
+				q.DisplayOrder = 0      // 旧格式没有 display_order
+				q.DisplayMode = "chart" // 旧格式默认为图表模式
 
 				// 使用查询内容作为去重键
 				if !seenQueries[q.Query] {
@@ -552,6 +557,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				CustomMetricLabel string
 				InitialUnit       string
 				DisplayOrder      int
+				DisplayMode       string
 			}{
 				Query:             query,
 				ChartTemplateID:   chartTemplateID,
@@ -559,8 +565,9 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 				Unit:              unit,
 				MetricLabel:       metricLabel,
 				CustomMetricLabel: customMetricLabel,
-				InitialUnit:       "", // 旧格式没有 initial_unit
-				DisplayOrder:      0,  // 旧格式没有 display_order
+				InitialUnit:       "",      // 旧格式没有 initial_unit
+				DisplayOrder:      0,       // 旧格式没有 display_order
+				DisplayMode:       "chart", // 旧格式默认为图表模式
 				})
 				log.Printf("[TaskQueue] 添加任务表中的查询: %s", query)
 			}
@@ -617,29 +624,55 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	}
 
 	log.Printf("[TaskQueue] 找到 %d 个webhook配置", len(webhooks))
-	log.Printf("[TaskQueue] 推送模式: %s", pushMode)
+	log.Printf("[TaskQueue] 使用 PromQL 级别的展示模式配置")
 
-	// 解析推送模式，支持混合模式（如 "chart,text"）
-	pushModes := strings.Split(pushMode, ",")
-	hasChartMode := false
-	hasTextMode := false
-	for _, mode := range pushModes {
-		mode = strings.TrimSpace(mode)
-		if mode == "chart" {
-			hasChartMode = true
-		} else if mode == "text" {
-			hasTextMode = true
+	// 按 PromQL 的 display_mode 分组数据
+	var chartQueries []struct {
+		Query             string
+		ChartTemplateID   int64
+		PromQLName        string
+		Unit              string
+		MetricLabel       string
+		CustomMetricLabel string
+		InitialUnit       string
+		DisplayOrder      int
+		DisplayMode       string
+	}
+	var textQueries []struct {
+		Query             string
+		ChartTemplateID   int64
+		PromQLName        string
+		Unit              string
+		MetricLabel       string
+		CustomMetricLabel string
+		InitialUnit       string
+		DisplayOrder      int
+		DisplayMode       string
+	}
+
+	for _, query := range uniqueQueries {
+		mode := query.DisplayMode
+		if mode == "" {
+			mode = "chart" // 默认为图表模式
+		}
+
+		if mode == "text" {
+			// 仅文本模式
+			textQueries = append(textQueries, query)
+		} else if mode == "chart" {
+			// 仅图表模式
+			chartQueries = append(chartQueries, query)
+		} else if mode == "both" {
+			// 混合模式：同时添加到两个列表
+			chartQueries = append(chartQueries, query)
+			textQueries = append(textQueries, query)
 		}
 	}
 
-	// 如果没有明确指定模式，默认为图表模式
-	if !hasChartMode && !hasTextMode {
-		hasChartMode = true
-	}
-
-	log.Printf("[TaskQueue] 推送模式解析结果: 图表模式=%v, 文本模式=%v", hasChartMode, hasTextMode)
+	log.Printf("[TaskQueue] 图表模式查询数: %d, 文本模式查询数: %d", len(chartQueries), len(textQueries))
 
 	// 文本模式推送逻辑
+	hasTextMode := len(textQueries) > 0
 	if hasTextMode {
 		// 文本模式：获取每个 PromQL 的最新值
 		log.Printf("[TaskQueue] 执行文本模式推送，获取最新指标值")
@@ -655,7 +688,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	})
 	var promqlOrder []string // 保持 PromQL 的显示顺序
 
-	for i, query := range uniqueQueries {
+	for i, query := range textQueries {
 		log.Printf("[TaskQueue] 获取查询 %d 的最新指标值: %s", i+1, query.Query)
 
 		// 确定使用哪个标签
@@ -739,6 +772,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 	}
 
 	// 图表模式推送逻辑
+	hasChartMode := len(chartQueries) > 0
 	if hasChartMode {
 		// 图表模式：获取时间序列数据
 		log.Printf("[TaskQueue] 执行图表模式推送，获取时间序列数据")
@@ -746,7 +780,7 @@ func runSingleTaskPushWithoutLock(db *sql.DB, taskID int64) error {
 		var allDataPoints []models.QueryDataPoints
 		seenSeries := make(map[string]bool) // 用于系列去重
 
-		for i, query := range uniqueQueries {
+		for i, query := range chartQueries {
 			// 获取图表类型
 			var chartType string
 			err = db.QueryRow("SELECT chart_type FROM chart_template WHERE id = ?", query.ChartTemplateID).Scan(&chartType)

@@ -185,6 +185,19 @@
               <small style="color: #666;">控制在卡片中的显示顺序，数字越小越靠前（默认为0）</small>
             </div>
             <div class="config-group">
+              <label>展示模式:</label>
+              <select v-model="promqlConfigs[promql.id].display_mode">
+                <option value="chart">图表模式</option>
+                <option value="text">文本模式</option>
+                <option value="both">图表+文本</option>
+              </select>
+              <small style="color: #666;">
+                • 图表模式: 显示时间序列图表<br>
+                • 文本模式: 仅显示最新值<br>
+                • 图表+文本: 同时显示图表和最新值
+              </small>
+            </div>
+            <div class="config-group">
               <label>初始单位 (可选):</label>
               <input 
                 type="text" 
@@ -433,6 +446,19 @@
               <small style="color: #666;">控制在卡片中的显示顺序，数字越小越靠前（默认为0）</small>
             </div>
             <div class="config-group">
+              <label>展示模式:</label>
+              <select v-model="editPromqlConfigs[promql.id].display_mode">
+                <option value="chart">图表模式</option>
+                <option value="text">文本模式</option>
+                <option value="both">图表+文本</option>
+              </select>
+              <small style="color: #666;">
+                • 图表模式: 显示时间序列图表<br>
+                • 文本模式: 仅显示最新值<br>
+                • 图表+文本: 同时显示图表和最新值
+              </small>
+            </div>
+            <div class="config-group">
               <label>初始单位 (可选):</label>
               <input 
                 type="text" 
@@ -660,6 +686,9 @@
             <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
               <span class="promql-name">{{ config.promql_name }}</span>
               <span v-if="config.display_order !== undefined && config.display_order !== 0" class="config-detail" style="color: #409eff;">(顺序: {{ config.display_order }})</span>
+              <span v-if="config.display_mode" class="config-detail" :style="{ color: config.display_mode === 'both' ? '#9c27b0' : (config.display_mode === 'text' ? '#f57c00' : '#1976d2') }">
+                ({{ config.display_mode === 'chart' ? '图表' : config.display_mode === 'text' ? '文本' : '混合' }})
+              </span>
               <span v-if="config.initial_unit" class="config-detail">(初始单位: {{ config.initial_unit }})</span>
               <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
               <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
@@ -815,6 +844,9 @@ const promqlConfigs = ref<Record<number, {
   unit: string
   metric_label: string
   custom_metric_label: string
+  initial_unit: string
+  display_order: number
+  display_mode: string
 }>>({})
 
 // PromQL 展开状态管理（必须在 watch 之前声明）
@@ -844,6 +876,9 @@ const editPromqlConfigs = ref<Record<number, {
   unit: string
   metric_label: string
   custom_metric_label: string
+  initial_unit: string
+  display_order: number
+  display_mode: string
 }>>({})
 const editTaskShowDataLabel = ref(false)
 const editTaskPushModeChart = ref(true) // 编辑时的图表模式复选框
@@ -861,7 +896,8 @@ watch(selectedPromQLs, (newVal, oldVal) => {
       metric_label: newTaskMetricLabel.value || 'pod',
       custom_metric_label: '',
       initial_unit: '',
-      display_order: 0
+      display_order: 0,
+      display_mode: 'chart' // 默认为图表模式
     }
   }
     
@@ -899,7 +935,8 @@ watch(editSelectedPromQLs, (newVal, oldVal) => {
         metric_label: editTaskMetricLabel.value || 'pod',
         custom_metric_label: editTaskCustomMetricLabel.value || '',
         initial_unit: '',
-        display_order: 0
+        display_order: 0,
+        display_mode: 'chart' // 默认为图表模式
       }
     }
     
@@ -1769,7 +1806,8 @@ async function updateTask() {
       metric_label: 'pod',
       custom_metric_label: '',
       initial_unit: '',
-      display_order: 0
+      display_order: 0,
+      display_mode: 'chart'
     }
     return {
       promql_id: numId,
@@ -1778,6 +1816,7 @@ async function updateTask() {
       custom_metric_label: config.custom_metric_label,
       initial_unit: config.initial_unit,
       display_order: config.display_order,
+      display_mode: config.display_mode,
       chart_template_id: parseInt(editTaskChartTemplateId.value) || null
     }
   })
@@ -2040,7 +2079,8 @@ function editTask(task) {
     metric_label: config.metric_label || 'pod',
     custom_metric_label: config.custom_metric_label || '',
     initial_unit: config.initial_unit || '',
-    display_order: config.display_order || 0
+    display_order: config.display_order || 0,
+    display_mode: config.display_mode || 'chart'
   }
     })
     console.log('[编辑任务] 加载 PromQL 配置:', editPromqlConfigs.value)
@@ -2052,7 +2092,8 @@ function editTask(task) {
         metric_label: task.metric_label || 'pod',
         custom_metric_label: task.custom_metric_label || '',
         initial_unit: '',
-        display_order: 0
+        display_order: 0,
+        display_mode: 'chart'
       }
     })
     console.log('[编辑任务] 使用任务级别配置初始化 PromQL:', editPromqlConfigs.value)
@@ -2118,7 +2159,8 @@ async function addPushTask() {
       metric_label: 'pod',
       custom_metric_label: '',
       initial_unit: '',
-      display_order: 0
+      display_order: 0,
+      display_mode: 'chart'
     }
     return {
       promql_id: numId,
@@ -2127,6 +2169,7 @@ async function addPushTask() {
       custom_metric_label: config.custom_metric_label,
       initial_unit: config.initial_unit,
       display_order: config.display_order,
+      display_mode: config.display_mode,
       chart_template_id: parseInt(newTaskChartTemplateId.value) || null
     }
   })

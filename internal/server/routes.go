@@ -261,6 +261,7 @@ type PromQLConfig struct {
 	ChartTemplateID   int64  `json:"chart_template_id"` // 每个PromQL可以有自己的图表模板
 	InitialUnit       string `json:"initial_unit"`      // 初始单位，用于自动单位转换
 	DisplayOrder      int    `json:"display_order"`     // 显示顺序，数字越小越靠前
+	DisplayMode       string `json:"display_mode"`      // 展示模式: chart(图表), text(文本), both(混合)
 }
 
 type PushTaskReq struct {
@@ -470,6 +471,7 @@ func getAllPushTasks(c *gin.Context) {
 	promqlRows, err := db.Query(`
 		SELECT ptp.promql_id, ptp.chart_template_id, 
 		       ptp.unit, ptp.metric_label, ptp.custom_metric_label, ptp.initial_unit, ptp.display_order,
+		       COALESCE(ptp.display_mode, 'chart') as display_mode,
 		       p.name as promql_name
 		FROM push_task_promql ptp
 		LEFT JOIN promql p ON ptp.promql_id = p.id
@@ -487,9 +489,9 @@ func getAllPushTasks(c *gin.Context) {
 		var promqlID int64
 		var chartTemplateID sql.NullInt64
 		var displayOrder int
-		var unit, metricLabel, customMetricLabel, initialUnit, promqlName string
+		var unit, metricLabel, customMetricLabel, initialUnit, displayMode, promqlName string
 		if err := promqlRows.Scan(&promqlID, &chartTemplateID, 
-			&unit, &metricLabel, &customMetricLabel, &initialUnit, &displayOrder, &promqlName); err != nil {
+			&unit, &metricLabel, &customMetricLabel, &initialUnit, &displayOrder, &displayMode, &promqlName); err != nil {
 			log.Printf("扫描PromQL数据失败: %v", err)
 			continue
 		}
@@ -504,6 +506,7 @@ func getAllPushTasks(c *gin.Context) {
 			"custom_metric_label": customMetricLabel,
 			"initial_unit":        initialUnit,
 			"display_order":       displayOrder,
+			"display_mode":        displayMode,
 		}
 				if chartTemplateID.Valid {
 					promqlConfig["chart_template_id"] = chartTemplateID.Int64
@@ -761,13 +764,19 @@ func createPushTask(c *gin.Context) {
 				chartTemplateID = req.ChartTemplateID // 如果没有配置，使用任务级别的
 			}
 
+			// 设置默认展示模式
+			displayMode := config.DisplayMode
+			if displayMode == "" {
+				displayMode = "chart"
+			}
+
 	_, err = tx.Exec(`
 		INSERT INTO push_task_promql (
 			task_id, promql_id, chart_template_id, 
-			unit, metric_label, custom_metric_label, initial_unit, display_order
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			unit, metric_label, custom_metric_label, initial_unit, display_order, display_mode
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, taskID, config.PromQLID, chartTemplateID, 
-		unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder)
+		unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder, displayMode)
 			if err != nil {
 				log.Printf("[createPushTask] Failed to insert push_task_promql with config: %v", err)
 				// 继续处理其他 PromQL，不中断
@@ -1046,13 +1055,19 @@ func updatePushTask(c *gin.Context) {
 					chartTemplateID = req.ChartTemplateID
 				}
 
+				// 设置默认展示模式
+				displayMode := config.DisplayMode
+				if displayMode == "" {
+					displayMode = "chart"
+				}
+
 		_, err = tx.Exec(`
 			INSERT INTO push_task_promql (
 				task_id, promql_id, chart_template_id, 
-				unit, metric_label, custom_metric_label, initial_unit, display_order
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				unit, metric_label, custom_metric_label, initial_unit, display_order, display_mode
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, id, config.PromQLID, chartTemplateID,
-			unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder)
+			unit, metricLabel, customMetricLabel, config.InitialUnit, config.DisplayOrder, displayMode)
 				if err != nil {
 					log.Printf("[updatePushTask] 插入新的PromQL关联失败: promql_id=%d, error=%v", config.PromQLID, err)
 				}

@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 12 // 版本12: 添加 display_order 字段支持自定义显示顺序
+const CurrentSchemaVersion = 13 // 版本13: 添加 display_mode 字段支持 PromQL 级别的展示模式
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {
@@ -51,6 +51,7 @@ var currentStructures = map[string]TableStructure{
 			"custom_metric_label": "TEXT",
 			"initial_unit":        "TEXT",
 			"display_order":       "INTEGER",
+			"display_mode":        "TEXT",
 		},
 	},
 	// 其他表可以按需添加...
@@ -301,6 +302,16 @@ var migrations = []Migration{
 		
 		-- 为现有记录设置默认顺序（按 id 升序）
 		UPDATE push_task_promql SET display_order = id WHERE display_order = 0;
+		`,
+	},
+	{
+		Version:     13,
+		Description: "添加 display_mode 字段支持 PromQL 级别的展示模式",
+		SQL: `
+		-- 为 push_task_promql 表添加 display_mode 字段
+		-- 用于控制每个 PromQL 的展示模式：chart(图表), text(文本), both(混合)
+		-- 默认值为 'chart'，保持向后兼容
+		ALTER TABLE push_task_promql ADD COLUMN display_mode TEXT DEFAULT 'chart';
 		`,
 	},
 }
