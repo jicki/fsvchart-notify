@@ -130,66 +130,75 @@ func GetDurationStep(d time.Duration) time.Duration {
 		log.Printf("[GetDurationStep] Duration ≤ 168h (7d): using 8h step")
 
 	case durationHours <= 360: // 15天以内
-		// 确保每天至少2个点（12小时一个点）
-		stepHours = 12
-		log.Printf("[GetDurationStep] Duration ≤ 360h (15d): using 12h step")
+		// 每天1个点（24小时一个点）→ 15个点
+		stepHours = 24
+		log.Printf("[GetDurationStep] Duration ≤ 360h (15d): using 24h step")
 
 	case durationHours <= 720: // 30天以内
-		// 确保每天至少1个点（24小时一个点）
-		stepHours = 24
-		log.Printf("[GetDurationStep] Duration ≤ 720h (30d): using 24h step")
+		// 每2天1个点（48小时一个点）→ 15个点
+		stepHours = 48
+		log.Printf("[GetDurationStep] Duration ≤ 720h (30d): using 48h step")
 
-	default: // 超过30天
-		// 确保每天至少1个点
-		stepHours = 24
-		log.Printf("[GetDurationStep] Duration > 720h: using 24h step")
+	case durationHours <= 1440: // 60天以内
+		// 每3天1个点（72小时一个点）→ 20个点
+		stepHours = 72
+		log.Printf("[GetDurationStep] Duration ≤ 1440h (60d): using 72h step")
+
+	default: // 超过60天
+		// 每7天1个点（168小时一个点）
+		stepHours = 168
+		log.Printf("[GetDurationStep] Duration > 1440h (60d): using 168h step")
 	}
 
 	// 计算预期的数据点数量
 	expectedPoints := durationHours / stepHours
 	log.Printf("[GetDurationStep] Expected data points with %.1fh step: %.1f", stepHours, expectedPoints)
 
-	// 确保每天至少有一个数据点
-	minPointsNeeded := float64(durationDays) // 最少需要的点数等于天数
-	if expectedPoints < minPointsNeeded {
-		// 调整步长以确保至少有每天一个点
-		stepHours = durationHours / minPointsNeeded
-		// 向下取整到最接近的整数小时
-		stepHours = math.Floor(stepHours)
-		if stepHours > 24 {
-			stepHours = 24 // 最大步长为24小时
-		}
-		log.Printf("[GetDurationStep] Adjusted step to %.1fh to ensure at least one point per day", stepHours)
-	}
-
-	// 如果数据点太多，增加步长
-	maxPoints := 90.0
+	// 如果数据点太多，增加步长（目标：图表清晰，数据点控制在25个以内）
+	const maxPoints = 25.0
+	const minPoints = 10.0
+	
 	if expectedPoints > maxPoints {
+		// 数据点过多，增加步长
 		proposedStepHours := durationHours / maxPoints
-		// 确保新步长不会导致每天少于一个点
-		if proposedStepHours <= 24 {
-			stepHours = proposedStepHours
-			// 向上取整到最接近的整数小时
-			stepHours = math.Ceil(stepHours)
-			log.Printf("[GetDurationStep] Adjusted step to %.1fh to limit maximum points while maintaining daily coverage", stepHours)
-		}
+		proposedStepHours = roundToReasonableStep(proposedStepHours)
+		stepHours = proposedStepHours
+		expectedPoints = durationHours / stepHours
+		log.Printf("[GetDurationStep] Adjusted step to %.1fh to limit points to max %.0f (new expected: %.1f)",
+			stepHours, maxPoints, expectedPoints)
+	} else if expectedPoints < minPoints && durationHours > 24 {
+		// 数据点太少（仅对超过1天的查询调整），减小步长
+		proposedStepHours := durationHours / minPoints
+		proposedStepHours = roundToReasonableStep(proposedStepHours)
+		stepHours = proposedStepHours
+		expectedPoints = durationHours / stepHours
+		log.Printf("[GetDurationStep] Adjusted step to %.1fh to ensure at least %.0f points (new expected: %.1f)",
+			stepHours, minPoints, expectedPoints)
 	}
 
 	// 转换为Duration
 	step := time.Duration(stepHours * float64(time.Hour))
 
-	// 最终验证：确保步长不会导致某些天没有数据点
-	finalExpectedPoints := durationHours / stepHours
-	if finalExpectedPoints < float64(durationDays) {
-		// 如果最终点数少于天数，强制使用24小时步长
-		step = 24 * time.Hour
-		log.Printf("[GetDurationStep] Final adjustment: forcing 24h step to ensure daily coverage")
-	}
-
 	log.Printf("[GetDurationStep] Final step duration: %v (will generate approximately %.1f points over %d days)",
 		step, durationHours/step.Hours(), durationDays)
 
 	return step
+}
+
+// roundToReasonableStep 将步长向上取整到合理的小时数
+// 合理的步长: 1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 168
+func roundToReasonableStep(stepHours float64) float64 {
+	reasonableSteps := []float64{1, 2, 3, 4, 6, 8, 12, 24, 48, 72, 168}
+	
+	// 找到第一个大于等于stepHours的合理步长
+	for _, rs := range reasonableSteps {
+		if stepHours <= rs {
+			return rs
+		}
+	}
+	
+	// 如果超过所有预设值，返回最大值
+	return 168.0
 }
 
 // FetchMetrics 从VictoriaMetrics获取指标数据并处理成前端可用的数据点格式
