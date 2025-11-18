@@ -480,57 +480,62 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		log.Printf("[FetchMetrics] Time range of data points (newest to oldest): %s to %s", firstTime, lastTime)
 	}
 
-	// 检查响应中是否包含所有预期的时间戳
-	timeStampMap := make(map[int64]bool)
-	for _, ts := range timeStamps {
-		timeStampMap[ts] = false // 初始为未找到
-	}
-
-	// 记录时间戳覆盖情况
-	for _, result := range vmResp.Data.Result {
-		// 按时间戳从新到旧排序数据点
-		sort.Slice(result.Values, func(i, j int) bool {
-			return result.Values[i][0].(float64) > result.Values[j][0].(float64)
-		})
-
-		for _, point := range result.Values {
-			ts := int64(point[0].(float64))
-			if _, exists := timeStampMap[ts]; exists {
-				timeStampMap[ts] = true // 标记为已找到
-			}
-		}
-	}
-
-	// 计算覆盖率
-	foundCount := 0
-	for _, found := range timeStampMap {
-		if found {
-			foundCount++
-		}
-	}
-
-	coverageRate := float64(foundCount) / float64(len(timeStampMap)) * 100
-	log.Printf("[FetchMetrics] Time range coverage: %.2f%% (%d/%d timestamps found in response)",
-		coverageRate, foundCount, len(timeStampMap))
-
-	// 如果覆盖率低于50%，记录详细信息
-	if coverageRate < 50 {
-		log.Printf("[FetchMetrics] WARNING: Low time range coverage, this may cause missing data!")
-
-		// 列出缺失的时间点（从最近到最早）
-		missingCount := 0
-		log.Printf("[FetchMetrics] Missing timestamps (newest to oldest):")
+	// 检查响应中是否包含所有预期的时间戳（仅对单天查询）
+	if duration.Hours() <= 24 && len(timeStamps) > 0 {
+		timeStampMap := make(map[int64]bool)
 		for _, ts := range timeStamps {
-			if !timeStampMap[ts] {
-				missingCount++
-				if missingCount <= 10 { // 只显示前10个
-					log.Printf("  - %s", time.Unix(ts, 0).Format("2006-01-02 15:04:05"))
+			timeStampMap[ts] = false // 初始为未找到
+		}
+
+		// 记录时间戳覆盖情况
+		for _, result := range vmResp.Data.Result {
+			// 按时间戳从新到旧排序数据点
+			sort.Slice(result.Values, func(i, j int) bool {
+				return result.Values[i][0].(float64) > result.Values[j][0].(float64)
+			})
+
+			for _, point := range result.Values {
+				ts := int64(point[0].(float64))
+				if _, exists := timeStampMap[ts]; exists {
+					timeStampMap[ts] = true // 标记为已找到
 				}
 			}
 		}
-		if missingCount > 10 {
-			log.Printf("  ... and %d more missing timestamps", missingCount-10)
+
+		// 计算覆盖率
+		foundCount := 0
+		for _, found := range timeStampMap {
+			if found {
+				foundCount++
+			}
 		}
+
+		coverageRate := float64(foundCount) / float64(len(timeStampMap)) * 100
+		log.Printf("[FetchMetrics] Time range coverage: %.2f%% (%d/%d timestamps found in response)",
+			coverageRate, foundCount, len(timeStampMap))
+
+		// 如果覆盖率低于50%，记录详细信息
+		if coverageRate < 50 {
+			log.Printf("[FetchMetrics] WARNING: Low time range coverage, this may cause missing data!")
+
+			// 列出缺失的时间点（从最近到最早）
+			missingCount := 0
+			log.Printf("[FetchMetrics] Missing timestamps (newest to oldest):")
+			for _, ts := range timeStamps {
+				if !timeStampMap[ts] {
+					missingCount++
+					if missingCount <= 10 { // 只显示前10个
+						log.Printf("  - %s", time.Unix(ts, 0).Format("2006-01-02 15:04:05"))
+					}
+				}
+			}
+			if missingCount > 10 {
+				log.Printf("  ... and %d more missing timestamps", missingCount-10)
+			}
+		}
+	} else if duration.Hours() > 24 {
+		// 对于多天查询，记录Prometheus返回的实际时间戳范围
+		log.Printf("[FetchMetrics] Multi-day query: using all timestamps from Prometheus response")
 	}
 
 	// 处理每个时间序列
@@ -764,8 +769,8 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		// 		actualPoints[labelValue][ts])
 		// }
 
-		// 如果数据点太少，进行插值填充
-		if len(timeKeys) < 5 && len(timeKeys) > 0 {
+		// 如果数据点太少，进行插值填充（仅对单天查询）
+		if duration.Hours() <= 24 && len(timeKeys) < 5 && len(timeKeys) > 0 {
 			log.Printf("[FetchMetrics] Too few points (%d) for label %s, performing interpolation",
 				len(timeKeys), labelValue)
 
