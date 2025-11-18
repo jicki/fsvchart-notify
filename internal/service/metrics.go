@@ -892,6 +892,104 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			customLabel, labelValues)
 	}
 
+	// 对于多天查询，额外获取当前时刻的值，确保图表显示最新数据
+	if duration.Hours() > 24 {
+		// 获取最后一个数据点的时间戳
+		var lastDataTimestamp int64
+		for _, timestamps := range actualPoints {
+			for ts := range timestamps {
+				if ts > lastDataTimestamp {
+					lastDataTimestamp = ts
+				}
+			}
+		}
+		
+		currentTime := time.Now()
+		lastDataTime := time.Unix(lastDataTimestamp, 0)
+		
+		// 如果最后一个数据点距离现在超过1小时，则获取当前时刻的值
+		if currentTime.Sub(lastDataTime) > time.Hour {
+			log.Printf("[FetchMetrics] Last data point is at %s, fetching current value at %s",
+				lastDataTime.Format("2006-01-02 15:04:05"),
+				currentTime.Format("2006-01-02 15:04:05"))
+			
+			// 使用 query API 获取当前值
+			currentValueURL, err := url.Parse(baseURL)
+			if err == nil {
+				currentValueURL.Path = path.Join(currentValueURL.Path, "/api/v1/query")
+				params := url.Values{}
+				params.Set("query", query)
+				currentValueURL.RawQuery = params.Encode()
+				
+				resp, err := http.Get(currentValueURL.String())
+				if err == nil {
+					defer resp.Body.Close()
+					body, err := ioutil.ReadAll(resp.Body)
+					if err == nil {
+						// 定义 query API 的响应结构（返回 Value 而不是 Values）
+						var currentResp struct {
+							Status string `json:"status"`
+							Data   struct {
+								ResultType string `json:"resultType"`
+								Result     []struct {
+									Metric map[string]string `json:"metric"`
+									Value  []interface{}     `json:"value"` // [timestamp, value]
+								} `json:"result"`
+							} `json:"data"`
+						}
+						
+						if err := json.Unmarshal(body, &currentResp); err == nil {
+							if currentResp.Status == "success" {
+								log.Printf("[FetchMetrics] Successfully fetched current values, result count: %d", len(currentResp.Data.Result))
+								
+								// 将当前值添加到 actualPoints
+								currentTimestamp := currentTime.Unix()
+								for _, result := range currentResp.Data.Result {
+									var labelValue string
+									if customLabel != "" {
+										if val, exists := result.Metric[customLabel]; exists {
+											labelValue = val
+										}
+									} else if seriesType != "" {
+										if val, exists := result.Metric[seriesType]; exists {
+											labelValue = val
+										}
+									}
+									
+									if labelValue != "" {
+										if len(result.Value) >= 2 {
+											val := result.Value[1].(string)
+											originalVal, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+											if err == nil {
+												floatVal := originalVal
+												// 应用单位转换
+												if initialUnit != "" && targetUnit != "" {
+													convertedVal, err := ConvertUnit(originalVal, initialUnit, targetUnit)
+													if err == nil {
+														floatVal = convertedVal
+														log.Printf("[FetchMetrics] Unit conversion for current value: %.2f %s -> %.2f %s",
+															originalVal, initialUnit, convertedVal, targetUnit)
+													}
+												}
+												
+												if actualPoints[labelValue] == nil {
+													actualPoints[labelValue] = make(map[int64]float64)
+												}
+												actualPoints[labelValue][currentTimestamp] = floatVal
+												log.Printf("[FetchMetrics] Added current value for %s: %.2f at %s",
+													labelValue, floatVal, currentTime.Format("2006-01-02 15:04:05"))
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// 处理数据点
 	for _, labelValue := range labelValues {
 		// 获取该标签的所有时间戳并按从新到旧排序
