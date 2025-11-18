@@ -1006,6 +1006,7 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 	}
 
 	// 处理数据点
+	log.Printf("[FetchMetrics] Processing data points for %d label values", len(labelValues))
 	for _, labelValue := range labelValues {
 		// 获取该标签的所有时间戳并按从新到旧排序
 		var labelTimeStamps []int64
@@ -1015,6 +1016,19 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 		sort.Slice(labelTimeStamps, func(i, j int) bool {
 			return labelTimeStamps[i] > labelTimeStamps[j] // 从新到旧排序
 		})
+
+		log.Printf("[FetchMetrics] Label '%s' has %d timestamps", labelValue, len(labelTimeStamps))
+		
+		// 打印前3个和最后3个时间戳及其值（用于调试）
+		for i, ts := range labelTimeStamps {
+			value := actualPoints[labelValue][ts]
+			if i < 3 || i >= len(labelTimeStamps)-3 {
+				log.Printf("[FetchMetrics]   [%d] %s (ts=%d) = %.2f", 
+					i, time.Unix(ts, 0).Format("2006-01-02 15:04:05"), ts, value)
+			} else if i == 3 {
+				log.Printf("[FetchMetrics]   ... (%d more timestamps)", len(labelTimeStamps)-6)
+			}
+		}
 
 		// 为每个时间戳创建数据点
 		for _, ts := range labelTimeStamps {
@@ -1030,6 +1044,8 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 			allPoints = append(allPoints, dp)
 		}
 	}
+	
+	log.Printf("[FetchMetrics] Total data points generated: %d", len(allPoints))
 
 	// 确保数据点按时间从新到旧排序
 	sort.Slice(allPoints, func(i, j int) bool {
