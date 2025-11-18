@@ -420,14 +420,18 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 
 	// 生成所有需要的时间点
 	var timeStamps []int64
-	// 从结束时间向前生成时间点，确保优先显示最近的数据
-	for t := alignedEnd.Unix(); t >= alignedStart.Unix(); t -= int64(step.Seconds()) {
-		timeStamps = append(timeStamps, t)
+	// 对于多天查询，不生成时间戳，直接使用 Prometheus 返回的时间戳
+	// 对于单天查询，从结束时间向前生成时间点
+	if duration.Hours() <= 24 {
+		// 从结束时间向前生成时间点，确保优先显示最近的数据
+		for t := alignedEnd.Unix(); t >= alignedStart.Unix(); t -= int64(step.Seconds()) {
+			timeStamps = append(timeStamps, t)
+		}
 	}
 
-	// 如果时间点过多，进行采样
+	// 如果时间点过多，进行采样（仅对单天查询）
 	const maxPoints = 90 // 最大数据点数量
-	if len(timeStamps) > maxPoints {
+	if duration.Hours() <= 24 && len(timeStamps) > maxPoints {
 		log.Printf("[FetchMetrics] Too many timestamps (%d), sampling down to %d points",
 			len(timeStamps), maxPoints)
 
@@ -453,16 +457,20 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 	}
 
 	// 保持时间戳按照从最近到最早的顺序
-	log.Printf("[FetchMetrics] Generated %d time stamps (ordered from newest to oldest)", len(timeStamps))
-	// 打印所有生成的时间戳
-	for i, ts := range timeStamps {
-		dateTime := time.Unix(ts, 0).Format("2006-01-02 15:04:05")
-		if i < 5 || i >= len(timeStamps)-5 {
-			// 只打印前5个和最后5个时间戳，避免日志过长
-			log.Printf("[FetchMetrics] TimeStamp[%d]: %d (%v)", i, ts, dateTime)
-		} else if i == 5 {
-			log.Printf("[FetchMetrics] ... skipping middle timestamps ...")
+	if duration.Hours() <= 24 {
+		log.Printf("[FetchMetrics] Generated %d time stamps (ordered from newest to oldest)", len(timeStamps))
+		// 打印所有生成的时间戳
+		for i, ts := range timeStamps {
+			dateTime := time.Unix(ts, 0).Format("2006-01-02 15:04:05")
+			if i < 5 || i >= len(timeStamps)-5 {
+				// 只打印前5个和最后5个时间戳，避免日志过长
+				log.Printf("[FetchMetrics] TimeStamp[%d]: %d (%v)", i, ts, dateTime)
+			} else if i == 5 {
+				log.Printf("[FetchMetrics] ... skipping middle timestamps ...")
+			}
 		}
+	} else {
+		log.Printf("[FetchMetrics] Multi-day query: will use timestamps from Prometheus response")
 	}
 
 	// 记录时间范围信息
@@ -975,6 +983,8 @@ func FetchMetrics(baseURL, query string, start, end time.Time, step time.Duratio
 												if actualPoints[labelValue] == nil {
 													actualPoints[labelValue] = make(map[int64]float64)
 												}
+												// 四舍五入到2位小数
+												floatVal = math.Round(floatVal*100) / 100
 												actualPoints[labelValue][currentTimestamp] = floatVal
 												log.Printf("[FetchMetrics] Added current value for %s: %.2f at %s",
 													labelValue, floatVal, currentTime.Format("2006-01-02 15:04:05"))
