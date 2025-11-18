@@ -297,62 +297,84 @@ func appendChartElements(elements []interface{}, elem HybridElement, isMultiDayD
 	}
 	sort.Strings(seriesNames)
 
-	// 构建飞书图表数据格式
-	var chartDataPoints []map[string]interface{}
-	for _, t := range times {
-		dataPoint := map[string]interface{}{"time": t}
-		if seriesMap, ok := dataPointsMap[t]; ok {
-			for _, series := range seriesNames {
+	// 构建飞书图表数据格式（每个系列一个数据集）
+	var chartData []map[string]interface{}
+	for _, series := range seriesNames {
+		var values []map[string]interface{}
+		for _, t := range times {
+			if seriesMap, ok := dataPointsMap[t]; ok {
 				if val, exists := seriesMap[series]; exists {
-					dataPoint[series] = val
+					values = append(values, map[string]interface{}{
+						"x":    t,
+						"y":    val,
+						"name": series,
+					})
 				}
 			}
 		}
-		chartDataPoints = append(chartDataPoints, dataPoint)
+		
+		if len(values) > 0 {
+			chartData = append(chartData, map[string]interface{}{
+				"name":   series,
+				"values": values,
+			})
+		}
 	}
 
 	// 构建系列配置
 	var chartSeries []map[string]interface{}
-	for i, series := range seriesNames {
+	for i := range seriesNames {
 		seriesConfig := map[string]interface{}{
 			"type":        elem.ChartType,
 			"dataIndex":   i,
-			"seriesField": series,
-			"xField":      "time",
-			"yField":      series,
+			"seriesField": "name",
+			"xField":      "x",
+			"yField":      "y",
 		}
+		
+		// 添加数据标签配置
 		if elem.ShowDataLabel {
+			labelFormatter := "{y}"
+			if elem.ChartData.Unit != "" {
+				if elem.ChartData.Unit == "%" {
+					labelFormatter = "{y}%"
+				} else {
+					labelFormatter = "{y}" + elem.ChartData.Unit
+				}
+			}
 			seriesConfig["label"] = map[string]interface{}{
-				"visible": true,
+				"visible":  true,
+				"formatter": labelFormatter,
 			}
 		}
+		
 		chartSeries = append(chartSeries, seriesConfig)
 	}
 
 	// 使用飞书官方标准图表格式
 	chartElement := map[string]interface{}{
-		"tag":      "chart",
-		"chart_id": "standard_chart",
+		"tag": "chart",
 		"chart_spec": map[string]interface{}{
-			"chartType": elem.ChartType,
-			"data": []map[string]interface{}{
-				{
-					"name":   "series_data",
-					"values": chartDataPoints,
-				},
-			},
+			"type":   "common",
+			"data":   chartData,
 			"series": chartSeries,
-			"xAxis": []map[string]interface{}{
+			"axes": []map[string]interface{}{
 				{
-					"field":  "time",
-					"type":   "category",
 					"orient": "bottom",
+					"label": map[string]interface{}{
+						"visible":    true,
+						"autoRotate": isMultiDayData,
+					},
 				},
-			},
-			"yAxis": []map[string]interface{}{
 				{
 					"orient": "left",
+					"label": map[string]interface{}{
+						"visible": true,
+					},
 				},
+			},
+			"legends": map[string]interface{}{
+				"position": "bottom",
 			},
 		},
 	}
