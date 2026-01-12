@@ -85,8 +85,8 @@ run: build
 # -----------
 # Docker
 # -----------
-.PHONY: docker
-docker:
+.PHONY: docker-build
+docker-build:
 	@echo "=> Reading version from VERSION file..."
 	$(eval VERSION := $(shell cat VERSION))
 	@echo "=> Building Docker image with tag: $(VERSION)..."
