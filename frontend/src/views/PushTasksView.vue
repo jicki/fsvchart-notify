@@ -2204,8 +2204,6 @@ async function addPushTask() {
     newTaskMetricLabel.value = 'pod'
     newTaskCustomMetricLabel.value = ''
     newTaskUnit.value = ''
-    newTaskPushModeChart.value = true // 重置推送模式
-    newTaskPushModeText.value = false
     promqlConfigs.value = {} // 重置 PromQL 配置
     newTaskWebhookIds.value = []
     selectedPromQLs.value = []
@@ -2240,12 +2238,42 @@ async function copyTask(task) {
     // 获取所有相关的 PromQL 查询
     let queries = [];
     let promqlChartTemplates = [];
+    let promqlConfigsList = [];
+    
     if (task.promql_ids && task.promql_ids.length > 0) {
       // 获取 PromQL 查询
       queries = promqls.value
         .filter(p => task.promql_ids.includes(p.id))
         .map(p => p.query);
       
+      // 复制每个 PromQL 的独立配置（关键修复！）
+      if (task.promql_configs && task.promql_configs.length > 0) {
+        promqlConfigsList = task.promql_configs.map(config => ({
+          promql_id: parseInt(config.promql_id),
+          unit: config.unit || '',
+          metric_label: config.metric_label || 'pod',
+          custom_metric_label: config.custom_metric_label || '',
+          initial_unit: config.initial_unit || '',
+          display_order: config.display_order || 0,
+          display_mode: config.display_mode || 'chart',
+          chart_template_id: config.chart_template_id ? parseInt(config.chart_template_id) : parseInt(task.chart_template_id)
+        }));
+        console.log('[复制任务] 复制 PromQL 配置:', promqlConfigsList)
+      } else {
+        // 如果原任务没有 promql_configs，使用任务级别的配置创建默认配置
+        promqlConfigsList = task.promql_ids.map(promqlId => ({
+          promql_id: parseInt(promqlId),
+          unit: task.unit || '',
+          metric_label: task.metric_label || 'pod',
+          custom_metric_label: task.custom_metric_label || '',
+          initial_unit: '',
+          display_order: 0,
+          display_mode: 'chart',
+          chart_template_id: parseInt(task.chart_template_id)
+        }));
+        console.log('[复制任务] 使用默认 PromQL 配置:', promqlConfigsList)
+      }
+
       // 为每个 PromQL 查询创建图表模板关联
       promqlChartTemplates = task.promql_ids.map(promqlId => ({
         promql_id: parseInt(promqlId),
@@ -2264,6 +2292,7 @@ async function copyTask(task) {
       name: `${task.name} (复制)`,
       source_id: parseInt(task.source_id),
       promql_ids: task.promql_ids.map(id => parseInt(id)),
+      promql_configs: promqlConfigsList, // 关键修复：包含每个 PromQL 的独立配置
       query: queries.join(', '), // 设置 query 字段为所有 PromQL 查询的组合
       time_range: task.time_range,
       step: task.step,
