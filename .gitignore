@@ -1,3 +1,6 @@
+# ai rule
+.cursor/
+
 data/
 bin/*
 frontend/node_modules/
