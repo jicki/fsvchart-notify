@@ -3,7 +3,7 @@
 # ===================
 
 # 1. Node 构建阶段 (编译前端)
-FROM reg.deeproute.ai/deeproute-public/node:25-alpine AS frontend-builder
+FROM reg.deeproute.ai/deeproute-public/zzh/node:25-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/ ./
 # 配置 npm 使用国内镜像源，提高下载速度和稳定性
