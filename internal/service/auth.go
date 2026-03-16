@@ -316,6 +316,12 @@ func GetAllUsers() ([]models.User, error) {
 	// 检查 auth_source 列是否存在
 	hasAuthSource := columnExists(db, "users", "auth_source")
 
+	// LDAP 启用时，批量修正未标记的 LDAP 用户（非初始 admin 且有邮箱的用户）
+	if hasAuthSource && authConfig != nil && authConfig.LDAP.Enabled {
+		db.Exec(`UPDATE users SET auth_source = 'ldap'
+		         WHERE auth_source = 'local' AND email != '' AND username != 'admin'`)
+	}
+
 	var query string
 	if hasAuthSource {
 		query = `SELECT id, username, COALESCE(display_name, '') as display_name,
