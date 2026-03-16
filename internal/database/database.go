@@ -13,7 +13,7 @@ import (
 )
 
 // 当前数据库结构版本
-const CurrentSchemaVersion = 13 // 版本13: 添加 display_mode 字段支持 PromQL 级别的展示模式
+const CurrentSchemaVersion = 14 // 版本14: 添加 auth_source 字段区分本地用户和 LDAP 用户
 
 // 表结构定义，用于验证和修复
 type TableStructure struct {

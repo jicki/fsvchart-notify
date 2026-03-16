@@ -86,31 +86,9 @@ func NewServer(addr string, port int) *http.Server {
 		log.Fatalf("Failed to create statik FS: %v", err)
 	}
 
-	// 对于前端路由路径，返回 index.html
-	frontendRoutes := []string{"/", "/login", "/profile", "/send-records", "/datasources", "/webhooks", "/chart-templates", "/promql", "/push-tasks"}
-	for _, route := range frontendRoutes {
-		r.GET(route, func(c *gin.Context) {
-			f, err := statikFS.Open("/index.html")
-			if err != nil {
-				c.String(http.StatusNotFound, "404 Not Found")
-				return
-			}
-			defer f.Close()
-
-			info, err := f.Stat()
-			if err != nil {
-				c.String(http.StatusNotFound, "404 Not Found")
-				return
-			}
-
-			c.DataFromReader(http.StatusOK, info.Size(), "text/html; charset=utf-8", f, nil)
-		})
-	}
-
-	// 对于没有匹配的路由，尝试从 statik 文件系统中获取文件
-	r.NoRoute(func(c *gin.Context) {
-		path := c.Request.URL.Path
-		f, err := statikFS.Open(path)
+	// serveIndexHTML 返回前端 SPA 入口
+	serveIndexHTML := func(c *gin.Context) {
+		f, err := statikFS.Open("/index.html")
 		if err != nil {
 			c.String(http.StatusNotFound, "404 Not Found")
 			return
@@ -123,8 +101,36 @@ func NewServer(addr string, port int) *http.Server {
 			return
 		}
 
-		contentType := detectContentType(path)
-		c.DataFromReader(http.StatusOK, info.Size(), contentType, f, nil)
+		c.DataFromReader(http.StatusOK, info.Size(), "text/html; charset=utf-8", f, nil)
+	}
+
+	// 根路由返回 index.html
+	r.GET("/", serveIndexHTML)
+
+	// 对于没有匹配的路由：静态资源尝试从 statik 读取，其余 fallback 到 index.html（SPA 路由）
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		// API 路径不做 fallback
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+
+		// 尝试从 statik 文件系统读取静态资源
+		f, err := statikFS.Open(path)
+		if err == nil {
+			defer f.Close()
+			info, statErr := f.Stat()
+			if statErr == nil {
+				contentType := detectContentType(path)
+				c.DataFromReader(http.StatusOK, info.Size(), contentType, f, nil)
+				return
+			}
+		}
+
+		// 非静态资源路径，返回 index.html 让前端路由处理
+		serveIndexHTML(c)
 	})
 
 	// 返回标准库的 http.Server
