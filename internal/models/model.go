@@ -86,6 +86,7 @@ type User struct {
 	DisplayName string    `json:"display_name"`
 	Email       string    `json:"email"`
 	Role        string    `json:"role"`
+	AuthSource  string    `json:"auth_source"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

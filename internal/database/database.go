@@ -314,6 +314,13 @@ var migrations = []Migration{
 		ALTER TABLE push_task_promql ADD COLUMN display_mode TEXT DEFAULT 'chart';
 		`,
 	},
+	{
+		Version:     14,
+		Description: "添加 auth_source 字段区分本地用户和 LDAP 用户",
+		SQL: `
+		ALTER TABLE users ADD COLUMN auth_source TEXT DEFAULT 'local';
+		`,
+	},
 }
 
 var (

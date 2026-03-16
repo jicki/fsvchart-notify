@@ -39,7 +39,8 @@
             </td>
             <td>{{ formatTime(u.created_at) }}</td>
             <td>
-              <button class="btn btn-sm btn-secondary" @click="openResetModal(u)">
+              <span v-if="u.auth_source === 'ldap'" class="badge badge-info">LDAP 用户</span>
+              <button v-else class="btn btn-sm btn-secondary" @click="openResetModal(u)">
                 重置密码
               </button>
             </td>
@@ -90,6 +91,7 @@ interface UserItem {
   display_name: string
   email: string
   role: string
+  auth_source: string
   created_at: string
   updated_at: string
 }

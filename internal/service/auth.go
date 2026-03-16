@@ -18,6 +18,23 @@ import (
 // 密钥用于签名JWT令牌
 var jwtSecret = []byte("fsvchart-notify-secret-key")
 
+// parseDateTime 解析 SQLite datetime 字符串，兼容多种格式
+func parseDateTime(s string) time.Time {
+	formats := []string{
+		"2006-01-02T15:04:05Z",
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05+08:00",
+		"2006-01-02T15:04:05.000Z",
+		time.RFC3339,
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
+}
+
 var authConfig *config.AuthConfig
 
 // InitAuth 初始化认证配置
@@ -100,18 +117,19 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 
 	err := db.QueryRow(`
 		SELECT id, username, password, COALESCE(display_name, '') as display_name,
-		       COALESCE(email, '') as email, role, created_at, updated_at
+		       COALESCE(email, '') as email, role, COALESCE(auth_source, 'local') as auth_source,
+		       created_at, updated_at
 		FROM users
 		WHERE username = ?
 	`, username).Scan(
 		&user.ID, &user.Username, &passwordHash, &user.DisplayName,
-		&user.Email, &user.Role, &createdAt, &updatedAt,
+		&user.Email, &user.Role, &user.AuthSource, &createdAt, &updatedAt,
 	)
 
 	if err == nil {
 		// 本地用户存在，验证密码
-		user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		user.CreatedAt = parseDateTime(createdAt)
+		user.UpdatedAt = parseDateTime(updatedAt)
 
 		if CheckPasswordHash(password, passwordHash) {
 			return &user, nil
@@ -175,8 +193,8 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 		}
 
 		result, insertErr := db.Exec(`
-			INSERT INTO users (username, password, display_name, email, role)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO users (username, password, display_name, email, role, auth_source)
+			VALUES (?, ?, ?, ?, ?, 'ldap')
 		`, username, hashedPassword, displayName, ldapUser.Email, role)
 		if insertErr != nil {
 			return nil, fmt.Errorf("创建本地用户失败: %w", insertErr)
@@ -191,6 +209,7 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 			DisplayName: displayName,
 			Email:       ldapUser.Email,
 			Role:        role,
+			AuthSource:  "ldap",
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}, nil
@@ -211,12 +230,13 @@ func GetUserByUsername(username string) (*models.User, error) {
 
 	err := db.QueryRow(`
 		SELECT id, username, password, COALESCE(display_name, '') as display_name,
-		       COALESCE(email, '') as email, role, created_at, updated_at
+		       COALESCE(email, '') as email, role, COALESCE(auth_source, 'local') as auth_source,
+		       created_at, updated_at
 		FROM users
 		WHERE username = ?
 	`, username).Scan(
 		&user.ID, &user.Username, &user.Password, &user.DisplayName,
-		&user.Email, &user.Role, &createdAt, &updatedAt,
+		&user.Email, &user.Role, &user.AuthSource, &createdAt, &updatedAt,
 	)
 
 	if err != nil {
@@ -226,9 +246,8 @@ func GetUserByUsername(username string) (*models.User, error) {
 		return nil, err
 	}
 
-	// 解析时间
-	user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	user.CreatedAt = parseDateTime(createdAt)
+	user.UpdatedAt = parseDateTime(updatedAt)
 
 	return &user, nil
 }
@@ -267,7 +286,8 @@ func GetAllUsers() ([]models.User, error) {
 
 	rows, err := db.Query(`
 		SELECT id, username, COALESCE(display_name, '') as display_name,
-		       COALESCE(email, '') as email, role, created_at, updated_at
+		       COALESCE(email, '') as email, role, COALESCE(auth_source, 'local') as auth_source,
+		       created_at, updated_at
 		FROM users
 		ORDER BY id ASC
 	`)
@@ -281,11 +301,11 @@ func GetAllUsers() ([]models.User, error) {
 		var user models.User
 		var createdAt, updatedAt string
 		if err := rows.Scan(&user.ID, &user.Username, &user.DisplayName,
-			&user.Email, &user.Role, &createdAt, &updatedAt); err != nil {
+			&user.Email, &user.Role, &user.AuthSource, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
-		user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		user.CreatedAt = parseDateTime(createdAt)
+		user.UpdatedAt = parseDateTime(updatedAt)
 		users = append(users, user)
 	}
 	return users, nil
