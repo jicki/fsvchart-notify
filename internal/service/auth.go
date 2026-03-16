@@ -18,6 +18,30 @@ import (
 // 密钥用于签名JWT令牌
 var jwtSecret = []byte("fsvchart-notify-secret-key")
 
+// columnExists 检查 SQLite 表中是否存在指定列
+func columnExists(db *sql.DB, table, column string) bool {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var dfltValue *string
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &dfltValue, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
+}
+
 // parseDateTime 解析 SQLite datetime 字符串，兼容多种格式
 func parseDateTime(s string) time.Time {
 	formats := []string{
@@ -284,13 +308,21 @@ func GetAllUsers() ([]models.User, error) {
 		return nil, errors.New("database connection failed")
 	}
 
-	rows, err := db.Query(`
-		SELECT id, username, COALESCE(display_name, '') as display_name,
-		       COALESCE(email, '') as email, role, COALESCE(auth_source, 'local') as auth_source,
-		       created_at, updated_at
-		FROM users
-		ORDER BY id ASC
-	`)
+	// 检查 auth_source 列是否存在
+	hasAuthSource := columnExists(db, "users", "auth_source")
+
+	var query string
+	if hasAuthSource {
+		query = `SELECT id, username, COALESCE(display_name, '') as display_name,
+		         COALESCE(email, '') as email, role, COALESCE(auth_source, 'local') as auth_source,
+		         created_at, updated_at FROM users ORDER BY id ASC`
+	} else {
+		query = `SELECT id, username, COALESCE(display_name, '') as display_name,
+		         COALESCE(email, '') as email, role, 'local' as auth_source,
+		         created_at, updated_at FROM users ORDER BY id ASC`
+	}
+
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}

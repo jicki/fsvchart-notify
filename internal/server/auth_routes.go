@@ -175,6 +175,10 @@ func listUsers(c *gin.Context) {
 		})
 		return
 	}
+	// 确保返回空数组而非 null
+	if users == nil {
+		users = []models.User{}
+	}
 	c.JSON(http.StatusOK, users)
 }
 

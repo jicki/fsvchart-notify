@@ -118,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { usePromqlHighlight } from '../../composables/usePromqlHighlight'
 import { useExpandable } from '../../composables/useExpandable'
 import { IconChevronDown, IconChevronUp } from '../icons'
@@ -142,7 +142,17 @@ const selectedIds = defineModel<string[]>('selectedIds', { default: () => [] })
 const configs = defineModel<Record<number, PromQLConfigForm>>('configs', { default: () => ({}) })
 
 const { highlightPromQL } = usePromqlHighlight()
-const { toggle, isExpanded, toggleAll, isAllExpandedFor } = useExpandable()
+const { toggle, isExpanded, toggleAll, isAllExpandedFor, expand } = useExpandable()
+
+// 勾选时自动展开
+watch(selectedIds, (newIds, oldIds) => {
+  const prev = new Set(oldIds || [])
+  for (const id of newIds) {
+    if (!prev.has(id)) {
+      expand(Number(id))
+    }
+  }
+})
 
 const isAllExpanded = computed(() => isAllExpandedFor(props.promqls.length))
 
