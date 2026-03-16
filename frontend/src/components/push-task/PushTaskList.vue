@@ -134,7 +134,7 @@ h4 {
 .text-muted {
   color: var(--color-text-muted);
   font-style: italic;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .send-times-list {
@@ -144,7 +144,7 @@ h4 {
 }
 
 .send-time {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-text-secondary);
 }
 
@@ -163,12 +163,12 @@ h4 {
 
 .promql-name {
   font-weight: 500;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .config-tag {
-  font-size: 11px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 6px;
   border-radius: 4px;
   background: var(--color-bg-light);
   color: var(--color-text-secondary);
@@ -191,7 +191,7 @@ h4 {
 }
 
 .webhook-tag {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-accent);
 }
 

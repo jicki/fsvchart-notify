@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import type { PushTask, SendTime } from '../types'
+import type { PushTask, SendTime, ChartTemplate } from '../types'
 import { useNotification } from './useNotification'
 
 interface PromQLConfigForm {
@@ -17,7 +17,7 @@ export function usePushTaskForm() {
   const name = ref('')
   const sourceId = ref('')
   const timeRange = ref('7d')
-  const chartTemplateId = ref('')
+  const chartType = ref('area')
   const cardTitle = ref('')
   const cardTemplate = ref('blue')
   const metricLabel = ref('pod')
@@ -52,7 +52,7 @@ export function usePushTaskForm() {
     name.value = ''
     sourceId.value = ''
     timeRange.value = '7d'
-    chartTemplateId.value = ''
+    chartType.value = 'area'
     cardTitle.value = ''
     cardTemplate.value = 'blue'
     metricLabel.value = 'pod'
@@ -67,11 +67,17 @@ export function usePushTaskForm() {
     promqlConfigs.value = {}
   }
 
-  function loadTask(task: PushTask) {
+  function loadTask(task: PushTask, chartTemplates?: ChartTemplate[]) {
     name.value = task.name
     sourceId.value = task.source_id.toString()
     timeRange.value = task.time_range || '7d'
-    chartTemplateId.value = task.chart_template_id?.toString() || ''
+    // 从已有的 chart_template_id 反查 chart_type
+    if (task.chart_template_id && chartTemplates) {
+      const tmpl = chartTemplates.find(t => t.id === task.chart_template_id)
+      chartType.value = tmpl?.chart_type || 'area'
+    } else {
+      chartType.value = 'area'
+    }
     cardTitle.value = task.card_title || ''
     cardTemplate.value = task.card_template || 'blue'
     metricLabel.value = task.metric_label || 'pod'
@@ -137,14 +143,18 @@ export function usePushTaskForm() {
       showWarning('请至少设置一个发送时间')
       return false
     }
-    if (!chartTemplateId.value) {
-      showWarning('请选择图表模板')
+    if (!chartType.value) {
+      showWarning('请选择图表类型')
       return false
     }
     return true
   }
 
-  function buildPayload(promqls: { id: number; query: string }[]) {
+  function buildPayload(promqls: { id: number; query: string }[], chartTemplates?: ChartTemplate[]) {
+    // 根据选择的 chartType 查找匹配的 chart_template_id
+    const matchedTemplate = chartTemplates?.find(t => t.chart_type === chartType.value)
+    const templateId = matchedTemplate?.id || null
+
     const promqlConfigsList = selectedPromQLs.value.map(id => {
       const numId = parseInt(id)
       const config = promqlConfigs.value[numId] || {
@@ -159,7 +169,7 @@ export function usePushTaskForm() {
         initial_unit: config.initial_unit,
         display_order: config.display_order,
         display_mode: config.display_mode,
-        chart_template_id: parseInt(chartTemplateId.value) || null
+        chart_template_id: templateId
       }
     })
 
@@ -174,7 +184,7 @@ export function usePushTaskForm() {
       }).filter(q => q).join(', '),
       time_range: timeRange.value,
       step: 0,
-      chart_template_id: parseInt(chartTemplateId.value) || null,
+      chart_template_id: templateId,
       webhook_ids: webhookIds.value.map(id => typeof id === 'string' ? parseInt(id) : id),
       card_title: cardTitle.value,
       card_template: cardTemplate.value,
@@ -191,7 +201,7 @@ export function usePushTaskForm() {
       })),
       promql_chart_templates: selectedPromQLs.value.map(promqlId => ({
         promql_id: parseInt(promqlId),
-        chart_template_id: parseInt(chartTemplateId.value) || null
+        chart_template_id: templateId
       }))
     }
   }
@@ -215,7 +225,7 @@ export function usePushTaskForm() {
   }
 
   return {
-    name, sourceId, timeRange, chartTemplateId, cardTitle, cardTemplate,
+    name, sourceId, timeRange, chartType, cardTitle, cardTemplate,
     metricLabel, customMetricLabel, unit, webhookIds, selectedPromQLs,
     buttonText, buttonURL, showDataLabel, sendTimes, promqlConfigs,
     resetForm, loadTask, validate, buildPayload, addSendTime, removeSendTime

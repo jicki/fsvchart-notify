@@ -157,6 +157,7 @@ body {
 
 /* 通用表单样式 */
 .form-input {
+  width: 100%;
   padding: 9px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -302,6 +303,9 @@ body {
   opacity: 0;
   width: 0;
   height: 0;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .toggle-track {

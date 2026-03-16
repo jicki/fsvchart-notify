@@ -1,1 +1,0 @@
-import{j as l,J as r}from"./index-5790b27d.js";function s(o,u=3e4){let n=null;function e(){t(),n=window.setInterval(o,u)}function t(){n!==null&&(clearInterval(n),n=null)}return l(()=>{o(),e()}),r(()=>{t()}),{start:e,stop:t}}export{s as u};

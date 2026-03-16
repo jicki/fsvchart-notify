@@ -11,39 +11,10 @@
           <IconChevronUp v-else :size="16" />
           {{ expandable.isAllExpandedFor(promqls.length) ? '收起所有' : '展开所有' }}
         </button>
-        <button v-if="!showAddForm" class="btn btn-primary" @click="showAddForm = true">
+        <button class="btn btn-primary" @click="openAddModal">
           <IconPlus :size="16" />
           添加查询
         </button>
-      </div>
-    </div>
-
-    <!-- 添加/编辑表单 -->
-    <div v-if="showAddForm" class="card" style="margin-bottom: var(--spacing-lg)">
-      <h4 style="margin-top: 0; margin-bottom: var(--spacing-md)">{{ isEditing ? '编辑' : '添加' }} PromQL 查询</h4>
-      <div class="form-group">
-        <label>名称</label>
-        <input class="form-input" type="text" v-model="formData.name" placeholder="查询名称" />
-      </div>
-      <div class="form-group">
-        <label>分类</label>
-        <input class="form-input" type="text" v-model="formData.category" placeholder="查询分类" />
-      </div>
-      <div class="form-group">
-        <label>描述</label>
-        <textarea class="form-input" v-model="formData.description" placeholder="查询描述"></textarea>
-      </div>
-      <div class="form-group">
-        <label>PromQL 查询</label>
-        <textarea class="form-input promql-textarea" v-model="formData.query" placeholder="PromQL 查询语句" rows="5"></textarea>
-        <div v-if="formData.query" class="promql-preview">
-          <h5>语法高亮预览</h5>
-          <pre class="promql-code" v-html="highlightPromQL(formData.query)"></pre>
-        </div>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" @click="savePromQL">保存</button>
-        <button class="btn btn-secondary" @click="cancelEdit">取消</button>
       </div>
     </div>
 
@@ -81,7 +52,7 @@
             <td>{{ formatDate(promql.updated_at) }}</td>
             <td>
               <div class="action-group">
-                <button class="btn-icon" @click="startEdit(promql)" title="编辑">
+                <button class="btn-icon" @click="openEditModal(promql)" title="编辑">
                   <IconEdit :size="16" />
                 </button>
                 <button class="btn-icon" @click="copyPromQL(promql)" title="复制" style="color: var(--color-purple)">
@@ -97,6 +68,39 @@
       </table>
       <div v-if="promqls.length === 0" class="empty">暂无 PromQL 查询</div>
     </div>
+
+    <!-- 添加/编辑弹窗 -->
+    <ModalDialog
+      :visible="showModal"
+      :title="isEditing ? '编辑 PromQL 查询' : '添加 PromQL 查询'"
+      max-width="680px"
+      @close="cancelEdit"
+    >
+      <div class="form-group">
+        <label>名称</label>
+        <input class="form-input" type="text" v-model="formData.name" placeholder="查询名称" />
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <input class="form-input" type="text" v-model="formData.category" placeholder="查询分类" />
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <textarea class="form-input" v-model="formData.description" placeholder="查询描述"></textarea>
+      </div>
+      <div class="form-group">
+        <label>PromQL 查询</label>
+        <textarea class="form-input promql-textarea" v-model="formData.query" placeholder="PromQL 查询语句" rows="5"></textarea>
+        <div v-if="formData.query" class="promql-preview">
+          <h5>语法高亮预览</h5>
+          <pre class="promql-code" v-html="highlightPromQL(formData.query)"></pre>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" @click="savePromQL">保存</button>
+        <button class="btn btn-secondary" @click="cancelEdit">取消</button>
+      </div>
+    </ModalDialog>
   </div>
 </template>
 
@@ -108,6 +112,7 @@ import { useNotification } from '../composables/useNotification'
 import { usePolling } from '../composables/usePolling'
 import { useExpandable } from '../composables/useExpandable'
 import { usePromqlHighlight } from '../composables/usePromqlHighlight'
+import ModalDialog from '../components/ModalDialog.vue'
 import { IconPlus, IconEdit, IconTrash, IconCopy, IconChevronDown, IconChevronUp } from '../components/icons'
 import type { PromQL } from '../types'
 
@@ -116,7 +121,7 @@ const expandable = useExpandable()
 const { highlightPromQL } = usePromqlHighlight()
 
 const promqls = ref<PromQL[]>([])
-const showAddForm = ref(false)
+const showModal = ref(false)
 const isEditing = ref(false)
 const editingId = ref<number | null>(null)
 
@@ -140,6 +145,36 @@ async function fetchPromQLs() {
 }
 
 usePolling(fetchPromQLs, 30000)
+
+function openAddModal() {
+  formData.name = ''
+  formData.description = ''
+  formData.query = ''
+  formData.category = ''
+  isEditing.value = false
+  editingId.value = null
+  showModal.value = true
+}
+
+function openEditModal(promql: PromQL) {
+  editingId.value = promql.id
+  formData.name = promql.name
+  formData.description = promql.description
+  formData.query = promql.query
+  formData.category = promql.category
+  isEditing.value = true
+  showModal.value = true
+}
+
+function cancelEdit() {
+  editingId.value = null
+  formData.name = ''
+  formData.description = ''
+  formData.query = ''
+  formData.category = ''
+  isEditing.value = false
+  showModal.value = false
+}
 
 async function savePromQL() {
   if (!formData.name || !formData.query) {
@@ -167,26 +202,6 @@ async function savePromQL() {
   } catch (err: unknown) {
     showError(err instanceof Error ? err.message : '保存PromQL查询失败')
   }
-}
-
-function startEdit(promql: PromQL) {
-  editingId.value = promql.id
-  formData.name = promql.name
-  formData.description = promql.description
-  formData.query = promql.query
-  formData.category = promql.category
-  isEditing.value = true
-  showAddForm.value = true
-}
-
-function cancelEdit() {
-  editingId.value = null
-  formData.name = ''
-  formData.description = ''
-  formData.query = ''
-  formData.category = ''
-  isEditing.value = false
-  showAddForm.value = false
 }
 
 async function deletePromQL(id: number) {
@@ -225,11 +240,6 @@ async function copyPromQL(promql: PromQL) {
   display: flex;
   gap: 8px;
   align-items: center;
-}
-
-.form-actions {
-  display: flex;
-  gap: 8px;
 }
 
 .promql-textarea {
@@ -297,6 +307,14 @@ async function copyPromQL(promql: PromQL) {
   display: flex;
   gap: 2px;
   align-items: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
 }
 
 /* PromQL 语法高亮 */

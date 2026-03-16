@@ -77,7 +77,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: '/datasources', label: '数据源', icon: IconDatabase },
   { path: '/webhooks', label: 'WebHook', icon: IconWebhook },
-  { path: '/chart-templates', label: '图表模板', icon: IconBarChart },
   { path: '/promql', label: 'PromQL', icon: IconCode },
   { path: '/push-tasks', label: '推送任务', icon: IconSend },
   { path: '/send-records', label: '发送记录', icon: IconFileText },

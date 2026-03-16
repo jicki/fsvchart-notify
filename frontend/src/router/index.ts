@@ -29,11 +29,6 @@ const router = createRouter({
           component: () => import('../views/WebhookView.vue')
         },
         {
-          path: 'chart-templates',
-          name: 'chartTemplates',
-          component: () => import('../views/ChartTemplatesView.vue')
-        },
-        {
           path: 'promql',
           name: 'promql',
           component: () => import('../views/PromQLView.vue')

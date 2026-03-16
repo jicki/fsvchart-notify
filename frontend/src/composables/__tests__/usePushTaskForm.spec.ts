@@ -72,12 +72,15 @@ describe('usePushTaskForm', () => {
       ]
     }
 
-    form.loadTask(task)
+    const chartTemplates = [
+      { id: 5, name: 'area模板', chart_type: 'area' }
+    ]
+    form.loadTask(task, chartTemplates)
 
     expect(form.name.value).toBe('测试任务')
     expect(form.sourceId.value).toBe('2')
     expect(form.timeRange.value).toBe('24h')
-    expect(form.chartTemplateId.value).toBe('5')
+    expect(form.chartType.value).toBe('area')
     expect(form.selectedPromQLs.value).toEqual(['10', '20'])
     expect(form.webhookIds.value).toEqual([1, 2])
     expect(form.sendTimes.value.length).toBe(2)
@@ -90,7 +93,7 @@ describe('usePushTaskForm', () => {
     const form = usePushTaskForm()
     form.sourceId.value = '1'
     form.selectedPromQLs.value = ['1']
-    form.chartTemplateId.value = '1'
+    form.chartType.value = 'area'
 
     expect(form.validate()).toBe(false)
   })
@@ -100,7 +103,7 @@ describe('usePushTaskForm', () => {
     form.name.value = '任务'
     form.sourceId.value = '1'
     form.selectedPromQLs.value = ['1']
-    form.chartTemplateId.value = '1'
+    form.chartType.value = 'area'
 
     expect(form.validate()).toBe(true)
   })
@@ -110,10 +113,13 @@ describe('usePushTaskForm', () => {
     form.name.value = '任务'
     form.sourceId.value = '2'
     form.selectedPromQLs.value = ['10']
-    form.chartTemplateId.value = '5'
+    form.chartType.value = 'area'
     form.timeRange.value = '7d'
 
-    const payload = form.buildPayload([{ id: 10, query: 'up{job="test"}' }])
+    const chartTemplates = [
+      { id: 5, name: 'area模板', chart_type: 'area' }
+    ]
+    const payload = form.buildPayload([{ id: 10, query: 'up{job="test"}' }], chartTemplates)
 
     expect(payload.name).toBe('任务')
     expect(payload.source_id).toBe(2)

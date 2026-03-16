@@ -1,6 +1,6 @@
 <template>
-  <div class="card task-form" :class="{ 'edit-form': isEditing }">
-    <h4>{{ isEditing ? '编辑任务' : '创建新的任务' }}</h4>
+  <div class="task-form" :class="{ card: !hideActions, 'edit-form': isEditing }">
+    <h4 v-if="!hideActions">{{ isEditing ? '编辑任务' : '创建新的任务' }}</h4>
 
     <div class="form-section">
       <div class="form-group">
@@ -40,12 +40,11 @@
       </div>
 
       <div class="form-group">
-        <label>选择图表模板</label>
-        <select class="form-input" v-model="form.chartTemplateId.value">
-          <option value="">-- 请选择图表模板 --</option>
-          <option v-for="tmpl in chartTemplates" :key="tmpl.id" :value="tmpl.id">
-            {{ tmpl.name }} ({{ tmpl.chart_type }})
-          </option>
+        <label>图表类型</label>
+        <select class="form-input" v-model="form.chartType.value">
+          <option value="area">面积图</option>
+          <option value="line">折线图</option>
+          <option value="bar">柱状图</option>
         </select>
       </div>
 
@@ -103,7 +102,7 @@
       <div class="form-hint">在图表中显示数据点的具体数值</div>
     </div>
 
-    <div class="form-actions">
+    <div v-if="!hideActions" class="form-actions">
       <button v-if="isEditing" class="btn btn-primary" @click.prevent="handleSubmit">保存修改</button>
       <button v-if="isEditing" class="btn btn-secondary" @click.prevent="$emit('cancel')">取消</button>
       <button v-if="!isEditing" class="btn btn-primary" @click.prevent="handleSubmit">创建并发送</button>
@@ -125,6 +124,7 @@ const props = defineProps<{
   chartTemplates: ChartTemplate[]
   promqls: PromQL[]
   isEditing: boolean
+  hideActions?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -134,7 +134,7 @@ const emit = defineEmits<{
 
 function handleSubmit() {
   if (!props.form.validate()) return
-  const payload = props.form.buildPayload(props.promqls)
+  const payload = props.form.buildPayload(props.promqls, props.chartTemplates)
   emit('submit', payload)
 }
 </script>

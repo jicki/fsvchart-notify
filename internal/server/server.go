@@ -87,7 +87,7 @@ func NewServer(addr string, port int) *http.Server {
 	}
 
 	// 对于前端路由路径，返回 index.html
-	frontendRoutes := []string{"/", "/login", "/profile", "/send-records"}
+	frontendRoutes := []string{"/", "/login", "/profile", "/send-records", "/datasources", "/webhooks", "/chart-templates", "/promql", "/push-tasks"}
 	for _, route := range frontendRoutes {
 		r.GET(route, func(c *gin.Context) {
 			f, err := statikFS.Open("/index.html")
