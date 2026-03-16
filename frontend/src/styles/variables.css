@@ -1,19 +1,19 @@
 :root {
-  /* 主色调 - Slate 蓝灰色系 */
-  --color-primary: #475569;
-  --color-primary-hover: #334155;
+  /* 主色调 - 石墨色系 */
+  --color-primary: #1e293b;
+  --color-primary-hover: #0f172a;
   --color-primary-light: #f1f5f9;
 
-  /* 强调色 - Indigo 靛蓝 */
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-light: #eef2ff;
+  /* 强调色 - 清爽蓝 Sky */
+  --color-accent: #0ea5e9;
+  --color-accent-hover: #0284c7;
+  --color-accent-light: #f0f9ff;
 
   /* 状态色 */
   --color-success: #10b981;
   --color-success-hover: #059669;
-  --color-danger: #ef4444;
-  --color-danger-hover: #dc2626;
+  --color-danger: #f43f5e;
+  --color-danger-hover: #e11d48;
   --color-warning: #f59e0b;
   --color-warning-hover: #d97706;
   --color-info: #06b6d4;
@@ -27,12 +27,12 @@
   --color-bg-light: #f1f5f9;
   --color-bg-hover: #f8fafc;
   --color-bg-disabled: #cbd5e1;
-  --color-bg-sidebar: #0f172a;
-  --color-bg-sidebar-hover: #1e293b;
-  --color-bg-sidebar-active: #334155;
+  --color-bg-sidebar: #1e293b;
+  --color-bg-sidebar-hover: #334155;
+  --color-bg-sidebar-active: #0ea5e9;
 
   /* 文字色 */
-  --color-text: #0f172a;
+  --color-text: #1e293b;
   --color-text-secondary: #64748b;
   --color-text-muted: #94a3b8;
   --color-text-white: #ffffff;
@@ -41,14 +41,14 @@
   /* 边框色 */
   --color-border: #e2e8f0;
   --color-border-light: #f1f5f9;
-  --color-border-focus: #a5b4fc;
-  --color-border-table: #e2e8f0;
+  --color-border-focus: #7dd3fc;
+  --color-border-table: #f1f5f9;
 
   /* 状态背景色 */
   --color-success-bg: #ecfdf5;
   --color-success-text: #065f46;
-  --color-error-bg: #fef2f2;
-  --color-error-text: #991b1b;
+  --color-error-bg: #fff1f2;
+  --color-error-text: #9f1239;
   --color-warning-bg: #fffbeb;
   --color-warning-text: #92400e;
   --color-info-bg: #ecfeff;
@@ -67,15 +67,15 @@
   --spacing-lg: 24px;
   --spacing-xl: 32px;
 
-  /* 阴影 - Tailwind 风格多层阴影 */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  /* 阴影 - 柔和北欧风 Soft Shadows */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.06), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(0 0 0 / 0.04);
+  --shadow-dropdown: 0 8px 24px -4px rgb(0 0 0 / 0.08), 0 4px 8px -4px rgb(0 0 0 / 0.03);
 
-  /* 字体 */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  /* 字体 - 优先 Inter */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
 
   /* 过渡 */
   --transition-fast: 150ms ease;
@@ -83,12 +83,12 @@
   --transition-slow: 300ms ease;
 
   /* 语法高亮 */
-  --color-syntax-label: #ec4899;
-  --color-syntax-number: #059669;
+  --color-syntax-label: #e879a8;
+  --color-syntax-number: #10b981;
 
   /* 遮罩/边框 */
-  --color-overlay: rgba(0, 0, 0, 0.5);
-  --color-border-sidebar: rgba(255, 255, 255, 0.1);
+  --color-overlay: rgba(15, 23, 42, 0.4);
+  --color-border-sidebar: rgba(255, 255, 255, 0.08);
 
   /* 侧边栏 */
   --sidebar-width: 240px;

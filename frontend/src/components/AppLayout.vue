@@ -218,6 +218,7 @@ onMounted(() => {
   background: var(--color-bg-sidebar-active);
   color: var(--color-text-white);
   font-weight: 500;
+  border-radius: var(--radius-md);
 }
 
 .nav-label {

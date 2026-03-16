@@ -10,8 +10,10 @@ body {
   font-family: var(--font-sans);
   background: var(--color-bg-page);
   color: var(--color-text);
-  line-height: 1.5;
+  line-height: 1.6;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* 通用按钮样式 */
@@ -426,6 +428,10 @@ body {
 .btn-icon-warning:hover { color: var(--color-warning-hover); background: var(--color-warning-bg); }
 .btn-icon-purple { color: var(--color-purple); }
 .btn-icon-purple:hover { color: var(--color-purple-hover); background: #f5f3ff; }
+
+/* 图标按钮 - accent 变体 */
+.btn-icon-accent { color: var(--color-accent); }
+.btn-icon-accent:hover { color: var(--color-accent-hover); background: var(--color-accent-light); }
 
 /* ======== 卡片标题 ======== */
 .card-title {
