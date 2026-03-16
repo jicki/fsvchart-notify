@@ -120,6 +120,7 @@ onMounted(() => {
   z-index: 100;
   transition: width var(--transition-normal);
   overflow: hidden;
+  border-right: 1px solid var(--color-border-sidebar);
 }
 
 .collapsed .sidebar {
@@ -216,9 +217,10 @@ onMounted(() => {
 
 .nav-item.router-link-active {
   background: var(--color-bg-sidebar-active);
-  color: var(--color-text-white);
+  color: var(--color-accent);
   font-weight: 500;
   border-radius: var(--radius-md);
+  border-left: 2px solid var(--color-accent);
 }
 
 .nav-label {

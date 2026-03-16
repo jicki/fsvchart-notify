@@ -12,6 +12,7 @@ body {
   color: var(--color-text);
   line-height: 1.6;
   letter-spacing: -0.011em;
+  color-scheme: dark;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -54,13 +55,14 @@ body {
 
 .btn-primary {
   background: var(--color-accent);
-  color: var(--color-text-white);
+  color: var(--color-bg-page);
   border-color: var(--color-accent);
 }
 
 .btn-primary:hover {
   background: var(--color-accent-hover);
   border-color: var(--color-accent-hover);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
 }
 
 .btn-secondary {
@@ -204,7 +206,9 @@ body {
 
 /* 卡片容器 */
 .card {
-  background: var(--color-bg-white);
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -326,6 +330,7 @@ body {
 
 .toggle input:checked + .toggle-track {
   background: var(--color-accent);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
 .toggle-track::after {
@@ -427,7 +432,7 @@ body {
 .btn-icon-warning { color: var(--color-warning); }
 .btn-icon-warning:hover { color: var(--color-warning-hover); background: var(--color-warning-bg); }
 .btn-icon-purple { color: var(--color-purple); }
-.btn-icon-purple:hover { color: var(--color-purple-hover); background: #f5f3ff; }
+.btn-icon-purple:hover { color: var(--color-purple-hover); background: rgba(167, 139, 250, 0.1); }
 
 /* 图标按钮 - accent 变体 */
 .btn-icon-accent { color: var(--color-accent); }

@@ -1,58 +1,58 @@
 :root {
-  /* 主色调 - 石墨色系 */
-  --color-primary: #1e293b;
-  --color-primary-hover: #0f172a;
-  --color-primary-light: #f1f5f9;
+  /* 主色调 - 深藏蓝 */
+  --color-primary: #38bdf8;
+  --color-primary-hover: #7dd3fc;
+  --color-primary-light: rgba(56, 189, 248, 0.1);
 
-  /* 强调色 - 清爽蓝 Sky */
-  --color-accent: #0ea5e9;
-  --color-accent-hover: #0284c7;
-  --color-accent-light: #f0f9ff;
+  /* 强调色 - 天蓝色 */
+  --color-accent: #38bdf8;
+  --color-accent-hover: #7dd3fc;
+  --color-accent-light: rgba(56, 189, 248, 0.08);
 
   /* 状态色 */
-  --color-success: #10b981;
-  --color-success-hover: #059669;
-  --color-danger: #f43f5e;
-  --color-danger-hover: #e11d48;
-  --color-warning: #f59e0b;
-  --color-warning-hover: #d97706;
-  --color-info: #06b6d4;
-  --color-info-hover: #0891b2;
-  --color-purple: #8b5cf6;
-  --color-purple-hover: #7c3aed;
+  --color-success: #34d399;
+  --color-success-hover: #6ee7b7;
+  --color-danger: #fb7185;
+  --color-danger-hover: #fda4af;
+  --color-warning: #fbbf24;
+  --color-warning-hover: #fcd34d;
+  --color-info: #67e8f9;
+  --color-info-hover: #a5f3fc;
+  --color-purple: #a78bfa;
+  --color-purple-hover: #c4b5fd;
 
   /* 背景色 */
-  --color-bg-page: #f8fafc;
-  --color-bg-white: #ffffff;
-  --color-bg-light: #f1f5f9;
-  --color-bg-hover: #f8fafc;
-  --color-bg-disabled: #cbd5e1;
-  --color-bg-sidebar: #1e293b;
-  --color-bg-sidebar-hover: #334155;
-  --color-bg-sidebar-active: #0ea5e9;
+  --color-bg-page: #0f172a;
+  --color-bg-white: #1e293b;
+  --color-bg-light: #1e293b;
+  --color-bg-hover: #334155;
+  --color-bg-disabled: #475569;
+  --color-bg-sidebar: #020617;
+  --color-bg-sidebar-hover: #1e293b;
+  --color-bg-sidebar-active: rgba(56, 189, 248, 0.15);
 
   /* 文字色 */
-  --color-text: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
+  --color-text: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
   --color-text-white: #ffffff;
-  --color-text-sidebar: #94a3b8;
+  --color-text-sidebar: #64748b;
 
   /* 边框色 */
-  --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  --color-border-focus: #7dd3fc;
-  --color-border-table: #f1f5f9;
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+  --color-border-focus: #38bdf8;
+  --color-border-table: #1e293b;
 
   /* 状态背景色 */
-  --color-success-bg: #ecfdf5;
-  --color-success-text: #065f46;
-  --color-error-bg: #fff1f2;
-  --color-error-text: #9f1239;
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #92400e;
-  --color-info-bg: #ecfeff;
-  --color-info-text: #155e75;
+  --color-success-bg: rgba(52, 211, 153, 0.1);
+  --color-success-text: #34d399;
+  --color-error-bg: rgba(251, 113, 133, 0.1);
+  --color-error-text: #fb7185;
+  --color-warning-bg: rgba(251, 191, 36, 0.1);
+  --color-warning-text: #fbbf24;
+  --color-info-bg: rgba(103, 232, 249, 0.1);
+  --color-info-text: #67e8f9;
 
   /* 圆角 */
   --radius-sm: 6px;
@@ -67,15 +67,15 @@
   --spacing-lg: 24px;
   --spacing-xl: 32px;
 
-  /* 阴影 - 柔和北欧风 Soft Shadows */
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.06), 0 2px 6px -2px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.08), 0 4px 10px -4px rgb(0 0 0 / 0.04);
-  --shadow-dropdown: 0 8px 24px -4px rgb(0 0 0 / 0.08), 0 4px 8px -4px rgb(0 0 0 / 0.03);
+  /* 阴影 - 霓虹辉光 */
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.4), 0 2px 6px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.5), 0 0 20px -4px rgba(56, 189, 248, 0.1);
+  --shadow-dropdown: 0 8px 24px -4px rgb(0 0 0 / 0.5), 0 0 16px -4px rgba(56, 189, 248, 0.08);
 
-  /* 字体 - 优先 Inter */
+  /* 字体 */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
 
   /* 过渡 */
   --transition-fast: 150ms ease;
@@ -83,12 +83,12 @@
   --transition-slow: 300ms ease;
 
   /* 语法高亮 */
-  --color-syntax-label: #e879a8;
-  --color-syntax-number: #10b981;
+  --color-syntax-label: #f472b6;
+  --color-syntax-number: #34d399;
 
   /* 遮罩/边框 */
-  --color-overlay: rgba(15, 23, 42, 0.4);
-  --color-border-sidebar: rgba(255, 255, 255, 0.08);
+  --color-overlay: rgba(2, 6, 23, 0.7);
+  --color-border-sidebar: rgba(56, 189, 248, 0.08);
 
   /* 侧边栏 */
   --sidebar-width: 240px;

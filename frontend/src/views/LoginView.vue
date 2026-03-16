@@ -98,14 +98,16 @@ const handleLogin = async () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: var(--color-bg-page);
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
 }
 
 .login-card {
   width: 100%;
   max-width: 400px;
   padding: 40px;
-  background: var(--color-bg-white);
+  background: rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
@@ -122,10 +124,11 @@ const handleLogin = async () => {
   justify-content: center;
   width: 56px;
   height: 56px;
-  background: var(--color-accent-light);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2));
   color: var(--color-accent);
   border-radius: var(--radius-lg);
   margin-bottom: 16px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
 }
 
 .login-header h2 {

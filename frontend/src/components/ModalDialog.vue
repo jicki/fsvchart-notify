@@ -59,8 +59,11 @@ watch(() => props.visible, (val) => {
 }
 
 .modal-container {
-  background: var(--color-bg-white);
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 900px;

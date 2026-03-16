@@ -60,6 +60,9 @@ func main() {
 		log.Fatalf("LoadConfig error: %v", err)
 	}
 
+	// 初始化认证配置
+	service.InitAuth(&cfg.Auth)
+
 	// 初始化数据库
 	_, err = database.InitDB(*dbPath)
 	if err != nil {

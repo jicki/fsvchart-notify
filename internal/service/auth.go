@@ -3,8 +3,11 @@ package service
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
+	"fsvchart-notify/internal/config"
 	"fsvchart-notify/internal/database"
 	"fsvchart-notify/internal/models"
 
@@ -14,6 +17,14 @@ import (
 
 // 密钥用于签名JWT令牌
 var jwtSecret = []byte("fsvchart-notify-secret-key")
+
+var authConfig *config.AuthConfig
+
+// InitAuth 初始化认证配置
+func InitAuth(cfg *config.AuthConfig) {
+	authConfig = cfg
+	jwtSecret = []byte(cfg.JWTSecret)
+}
 
 // JWTClaims 定义JWT令牌的声明
 type JWTClaims struct {
@@ -25,7 +36,12 @@ type JWTClaims struct {
 // GenerateToken 生成JWT令牌
 func GenerateToken(username, role string) (string, error) {
 	nowTime := time.Now()
-	expireTime := nowTime.Add(24 * time.Hour) // 令牌有效期24小时
+
+	hours := 24
+	if authConfig != nil && authConfig.TokenExpiry > 0 {
+		hours = authConfig.TokenExpiry
+	}
+	expireTime := nowTime.Add(time.Duration(hours) * time.Hour)
 
 	claims := JWTClaims{
 		Username: username,
@@ -71,7 +87,7 @@ func CheckPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-// AuthenticateUser 验证用户凭据
+// AuthenticateUser 验证用户凭据（本地优先，LDAP 回退）
 func AuthenticateUser(username, password string) (*models.User, error) {
 	db := database.GetDB()
 	if db == nil {
@@ -83,32 +99,89 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 	var createdAt, updatedAt string
 
 	err := db.QueryRow(`
-		SELECT id, username, password, COALESCE(display_name, '') as display_name, 
-		       COALESCE(email, '') as email, role, created_at, updated_at 
-		FROM users 
+		SELECT id, username, password, COALESCE(display_name, '') as display_name,
+		       COALESCE(email, '') as email, role, created_at, updated_at
+		FROM users
 		WHERE username = ?
 	`, username).Scan(
 		&user.ID, &user.Username, &passwordHash, &user.DisplayName,
 		&user.Email, &user.Role, &createdAt, &updatedAt,
 	)
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errors.New("user not found")
+	if err == nil {
+		// 本地用户存在，验证密码
+		user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+
+		if CheckPasswordHash(password, passwordHash) {
+			return &user, nil
 		}
-		return nil, err
-	}
 
-	// 解析时间
-	user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		// 本地密码不匹配，尝试 LDAP
+		if authConfig != nil && authConfig.LDAP.Enabled {
+			ldapUser, ldapErr := AuthenticateLDAP(authConfig.LDAP, username, password)
+			if ldapErr == nil {
+				// LDAP 验证成功，更新本地用户信息
+				if ldapUser.DisplayName != "" && user.DisplayName == "" {
+					db.Exec(`UPDATE users SET display_name = ? WHERE id = ?`, ldapUser.DisplayName, user.ID)
+					user.DisplayName = ldapUser.DisplayName
+				}
+				if ldapUser.Email != "" && user.Email == "" {
+					db.Exec(`UPDATE users SET email = ? WHERE id = ?`, ldapUser.Email, user.ID)
+					user.Email = ldapUser.Email
+				}
+				return &user, nil
+			}
+		}
 
-	// 验证密码
-	if !CheckPasswordHash(password, passwordHash) {
 		return nil, errors.New("invalid password")
 	}
 
-	return &user, nil
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// 本地用户不存在，尝试 LDAP 认证
+	if authConfig != nil && authConfig.LDAP.Enabled {
+		ldapUser, ldapErr := AuthenticateLDAP(authConfig.LDAP, username, password)
+		if ldapErr != nil {
+			return nil, fmt.Errorf("认证失败: %w", ldapErr)
+		}
+
+		// LDAP 认证成功，自动创建本地用户
+		hashedPassword, hashErr := HashPassword(password)
+		if hashErr != nil {
+			return nil, fmt.Errorf("密码加密失败: %w", hashErr)
+		}
+
+		displayName := ldapUser.DisplayName
+		if displayName == "" {
+			displayName = username
+		}
+
+		result, insertErr := db.Exec(`
+			INSERT INTO users (username, password, display_name, email, role)
+			VALUES (?, ?, ?, ?, ?)
+		`, username, hashedPassword, displayName, ldapUser.Email, authConfig.LDAP.DefaultRole)
+		if insertErr != nil {
+			return nil, fmt.Errorf("创建本地用户失败: %w", insertErr)
+		}
+
+		id, _ := result.LastInsertId()
+		log.Printf("LDAP 用户首次登录，已创建本地账号: %s (ID: %d)", username, id)
+
+		return &models.User{
+			ID:          id,
+			Username:    username,
+			DisplayName: displayName,
+			Email:       ldapUser.Email,
+			Role:        authConfig.LDAP.DefaultRole,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}, nil
+	}
+
+	return nil, errors.New("user not found")
 }
 
 // GetUserByUsername 通过用户名获取用户信息
@@ -122,9 +195,9 @@ func GetUserByUsername(username string) (*models.User, error) {
 	var createdAt, updatedAt string
 
 	err := db.QueryRow(`
-		SELECT id, username, password, COALESCE(display_name, '') as display_name, 
-		       COALESCE(email, '') as email, role, created_at, updated_at 
-		FROM users 
+		SELECT id, username, password, COALESCE(display_name, '') as display_name,
+		       COALESCE(email, '') as email, role, created_at, updated_at
+		FROM users
 		WHERE username = ?
 	`, username).Scan(
 		&user.ID, &user.Username, &user.Password, &user.DisplayName,
@@ -162,8 +235,8 @@ func UpdateUserPassword(username, oldPassword, newPassword string) error {
 	// 更新密码
 	db := database.GetDB()
 	_, err = db.Exec(`
-		UPDATE users 
-		SET password = ?, updated_at = CURRENT_TIMESTAMP 
+		UPDATE users
+		SET password = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`, hashedPassword, user.ID)
 
@@ -178,8 +251,8 @@ func UpdateUserInfo(username string, info models.UpdateUserRequest) error {
 	}
 
 	_, err := db.Exec(`
-		UPDATE users 
-		SET display_name = ?, email = ?, updated_at = CURRENT_TIMESTAMP 
+		UPDATE users
+		SET display_name = ?, email = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE username = ?
 	`, info.DisplayName, info.Email, username)
 
