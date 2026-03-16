@@ -32,7 +32,7 @@
     <ModalDialog
       :visible="showCreateModal"
       title="创建新任务"
-      max-width="720px"
+      max-width="900px"
       @close="showCreateModal = false"
     >
       <PushTaskForm
@@ -54,7 +54,7 @@
     <ModalDialog
       :visible="showEditModal"
       title="编辑任务"
-      max-width="720px"
+      max-width="900px"
       @close="cancelEdit"
     >
       <PushTaskForm

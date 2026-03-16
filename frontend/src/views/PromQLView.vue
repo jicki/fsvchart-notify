@@ -73,7 +73,7 @@
     <ModalDialog
       :visible="showModal"
       :title="isEditing ? '编辑 PromQL 查询' : '添加 PromQL 查询'"
-      max-width="680px"
+      max-width="900px"
       @close="cancelEdit"
     >
       <div class="form-group">

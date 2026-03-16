@@ -63,7 +63,7 @@ watch(() => props.visible, (val) => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 680px;
+  max-width: 900px;
   animation: modal-in 0.2s ease-out;
 }
 
