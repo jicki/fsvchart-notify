@@ -21,7 +21,7 @@
             <span :class="['badge', task.enabled ? 'badge-success' : 'badge-warning']">
               {{ task.enabled ? '启用' : '禁用' }}
             </span>
-            <div class="action-group">
+            <div v-if="isAdmin" class="action-group">
               <button class="btn-icon" @click.prevent="$emit('edit', task)" title="编辑">
                 <IconEdit :size="16" />
               </button>
@@ -116,6 +116,7 @@ import type { PushTask } from '../../types'
 defineProps<{
   tasks: PushTask[]
   editingTaskId: number | null
+  isAdmin: boolean
   getSourceName: (id: number) => string
   getPromqlName: (id: number) => string
 }>()

@@ -17,3 +17,4 @@ auth:
     display_name_attr: "cn"
     email_attr: "mail"
     default_role: "user"
+    admin_group_dn: ""  # 可选，如 "cn=admins,ou=groups,dc=example,dc=com"

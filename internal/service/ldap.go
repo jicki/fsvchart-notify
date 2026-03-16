@@ -15,6 +15,7 @@ type LDAPUser struct {
 	Username    string
 	DisplayName string
 	Email       string
+	IsAdmin     bool
 }
 
 // AuthenticateLDAP 使用 LDAP 验证用户
@@ -77,9 +78,37 @@ func AuthenticateLDAP(cfg config.LDAPConfig, username, password string) (*LDAPUs
 
 	log.Printf("LDAP 认证成功: %s", username)
 
+	// 检查用户是否属于 admin 组
+	isAdmin := false
+	if cfg.AdminGroupDN != "" {
+		// 重新使用管理员账号绑定搜索组
+		if cfg.BindDN != "" {
+			err = conn.Bind(cfg.BindDN, cfg.BindPassword)
+			if err != nil {
+				log.Printf("LDAP admin 组检查绑定失败: %v", err)
+			} else {
+				groupSearch := ldap.NewSearchRequest(
+					cfg.AdminGroupDN,
+					ldap.ScopeBaseObject,
+					ldap.NeverDerefAliases,
+					0, 0, false,
+					fmt.Sprintf("(|(member=%s)(uniqueMember=%s))", ldap.EscapeFilter(entry.DN), ldap.EscapeFilter(entry.DN)),
+					[]string{"dn"},
+					nil,
+				)
+				groupResult, groupErr := conn.Search(groupSearch)
+				if groupErr == nil && len(groupResult.Entries) > 0 {
+					isAdmin = true
+					log.Printf("LDAP 用户 %s 属于 admin 组", username)
+				}
+			}
+		}
+	}
+
 	return &LDAPUser{
 		Username:    username,
 		DisplayName: entry.GetAttributeValue(cfg.DisplayAttr),
 		Email:       entry.GetAttributeValue(cfg.EmailAttr),
+		IsAdmin:     isAdmin,
 	}, nil
 }

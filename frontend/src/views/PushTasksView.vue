@@ -5,7 +5,7 @@
         <h3>推送任务</h3>
         <p>管理定时图表推送任务</p>
       </div>
-      <button class="btn btn-primary" @click="openCreateModal">
+      <button v-if="isAdmin" class="btn btn-primary" @click="openCreateModal">
         <IconPlus :size="16" />
         创建任务
       </button>
@@ -19,6 +19,7 @@
     <PushTaskList
       :tasks="tasks"
       :editing-task-id="editingTaskId"
+      :is-admin="isAdmin"
       :get-source-name="store.getSourceName"
       :get-promql-name="store.getPromqlName"
       @edit="openEditModal"
@@ -79,11 +80,14 @@ import { ref, computed } from 'vue'
 import { usePushTaskStore } from '../stores/pushTask'
 import { usePushTaskForm } from '../composables/usePushTaskForm'
 import { usePolling } from '../composables/usePolling'
+import { useAuthStore } from '../stores/auth'
 import ModalDialog from '../components/ModalDialog.vue'
 import PushTaskForm from '../components/push-task/PushTaskForm.vue'
 import PushTaskList from '../components/push-task/PushTaskList.vue'
 import { IconPlus } from '../components/icons'
 import type { PushTask } from '../types'
+
+const { isAdmin } = useAuthStore()
 
 const store = usePushTaskStore()
 const tasks = computed(() => store.tasks)

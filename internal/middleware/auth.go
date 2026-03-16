@@ -53,7 +53,7 @@ func JWTAuth() gin.HandlerFunc {
 	}
 }
 
-// AdminAuth 中间件，用于验证管理员权限
+// AdminAuth 中间件，用于验证管理员权限（包含 JWT 验证）
 func AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 先执行JWT验证
@@ -67,12 +67,28 @@ func AdminAuth() gin.HandlerFunc {
 		if !exists || role != "admin" {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
-				"message": "Admin privileges required",
+				"message": "需要管理员权限",
 			})
 			c.Abort()
 			return
 		}
 
+		c.Next()
+	}
+}
+
+// RequireAdmin 纯角色检查中间件，需在 JWTAuth 之后的路由组内使用
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		if !exists || role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    403,
+				"message": "需要管理员权限",
+			})
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
 }

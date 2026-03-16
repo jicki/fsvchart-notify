@@ -26,6 +26,11 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     throw new Error('认证已过期，请重新登录')
   }
 
+  // 处理 403 权限不足
+  if (response.status === 403) {
+    throw new Error('权限不足，需要管理员权限')
+  }
+
   return response
 }
 

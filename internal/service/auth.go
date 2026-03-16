@@ -130,6 +130,15 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 					db.Exec(`UPDATE users SET email = ? WHERE id = ?`, ldapUser.Email, user.ID)
 					user.Email = ldapUser.Email
 				}
+				// 同步 LDAP admin 组角色
+				newRole := authConfig.LDAP.DefaultRole
+				if ldapUser.IsAdmin {
+					newRole = "admin"
+				}
+				if user.Role != newRole {
+					db.Exec(`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, newRole, user.ID)
+					user.Role = newRole
+				}
 				return &user, nil
 			}
 		}
@@ -159,10 +168,16 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 			displayName = username
 		}
 
+		// 根据 LDAP admin 组决定角色
+		role := authConfig.LDAP.DefaultRole
+		if ldapUser.IsAdmin {
+			role = "admin"
+		}
+
 		result, insertErr := db.Exec(`
 			INSERT INTO users (username, password, display_name, email, role)
 			VALUES (?, ?, ?, ?, ?)
-		`, username, hashedPassword, displayName, ldapUser.Email, authConfig.LDAP.DefaultRole)
+		`, username, hashedPassword, displayName, ldapUser.Email, role)
 		if insertErr != nil {
 			return nil, fmt.Errorf("创建本地用户失败: %w", insertErr)
 		}
@@ -175,7 +190,7 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 			Username:    username,
 			DisplayName: displayName,
 			Email:       ldapUser.Email,
-			Role:        authConfig.LDAP.DefaultRole,
+			Role:        role,
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}, nil

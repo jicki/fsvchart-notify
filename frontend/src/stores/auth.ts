@@ -8,6 +8,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserInfo | null>(getUser())
 
   const isLoggedIn = computed(() => !!token.value)
+  const isAdmin = computed(() => user.value?.role === 'admin')
 
   const userDisplayName = computed(() => {
     if (!user.value) return ''
@@ -43,6 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     user,
     isLoggedIn,
+    isAdmin,
     userDisplayName,
     login,
     logout,

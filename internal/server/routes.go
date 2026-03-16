@@ -2032,7 +2032,7 @@ func RegisterRoutes(r *gin.Engine) {
 	// 认证相关路由
 	r.POST("/api/auth/login", login)
 
-	// 需要认证的路由组
+	// 需要认证的路由组 - 所有认证用户可访问（只读）
 	authGroup := r.Group("/api")
 	authGroup.Use(middleware.JWTAuth())
 	{
@@ -2041,44 +2041,49 @@ func RegisterRoutes(r *gin.Engine) {
 		authGroup.PUT("/user/password", changePassword)
 		authGroup.PUT("/user/info", updateUserInfo)
 
-		// 1. metrics_source 数据源管理
+		// 只读路由
 		authGroup.GET("/metrics_source", getMetricsSources)
-		authGroup.POST("/metrics_source", createMetricsSource)
-		authGroup.PUT("/metrics_source/:id", updateMetricsSource)
-		authGroup.DELETE("/metrics_source/:id", deleteMetricsSource)
-
-		// feishu_webhook
 		authGroup.GET("/feishu_webhook", getFeishuWebhooks)
-		authGroup.POST("/feishu_webhook", createFeishuWebhook)
-		authGroup.PUT("/feishu_webhook/:id", updateFeishuWebhook)
-		authGroup.DELETE("/feishu_webhook/:id", deleteFeishuWebhook)
-
-		// push_task
 		authGroup.GET("/push_task", getAllPushTasks)
-		authGroup.POST("/push_task", createPushTask)
-		authGroup.PUT("/push_task/:id", updatePushTask)
-		authGroup.PUT("/push_task/:id/toggle", togglePushTask)
-		authGroup.DELETE("/push_task/:id", deletePushTask)
-		authGroup.POST("/push_task/:id/run", runPushTaskHandler)
-
-		// push_task_webhook
-		authGroup.POST("/push_task_webhook", createPushTaskWebhook)
-		authGroup.DELETE("/push_task_webhook/:taskId/:webhookId", deletePushTaskWebhook)
-
-		// chart_template routes
 		authGroup.GET("/chart_template", getChartTemplates)
-		authGroup.POST("/chart_template", createChartTemplate)
-		authGroup.PUT("/chart_template/:id", updateChartTemplate)
-		authGroup.DELETE("/chart_template/:id", deleteChartTemplate)
-
-		// PromQL 相关路由
 		authGroup.GET("/promqls", getPromQLs)
-		authGroup.POST("/promql", createPromQL)
-		authGroup.PUT("/promql/:id", updatePromQL)
-		authGroup.DELETE("/promql/:id", deletePromQL)
-
-		// 发送记录
 		authGroup.GET("/send_records", handler.HandleGetSendRecords)
+	}
+
+	// 需要管理员权限的路由组 - 仅 admin 可访问（写操作）
+	adminGroup := r.Group("/api")
+	adminGroup.Use(middleware.JWTAuth(), middleware.RequireAdmin())
+	{
+		// metrics_source 写操作
+		adminGroup.POST("/metrics_source", createMetricsSource)
+		adminGroup.PUT("/metrics_source/:id", updateMetricsSource)
+		adminGroup.DELETE("/metrics_source/:id", deleteMetricsSource)
+
+		// feishu_webhook 写操作
+		adminGroup.POST("/feishu_webhook", createFeishuWebhook)
+		adminGroup.PUT("/feishu_webhook/:id", updateFeishuWebhook)
+		adminGroup.DELETE("/feishu_webhook/:id", deleteFeishuWebhook)
+
+		// push_task 写操作
+		adminGroup.POST("/push_task", createPushTask)
+		adminGroup.PUT("/push_task/:id", updatePushTask)
+		adminGroup.PUT("/push_task/:id/toggle", togglePushTask)
+		adminGroup.DELETE("/push_task/:id", deletePushTask)
+		adminGroup.POST("/push_task/:id/run", runPushTaskHandler)
+
+		// push_task_webhook 写操作
+		adminGroup.POST("/push_task_webhook", createPushTaskWebhook)
+		adminGroup.DELETE("/push_task_webhook/:taskId/:webhookId", deletePushTaskWebhook)
+
+		// chart_template 写操作
+		adminGroup.POST("/chart_template", createChartTemplate)
+		adminGroup.PUT("/chart_template/:id", updateChartTemplate)
+		adminGroup.DELETE("/chart_template/:id", deleteChartTemplate)
+
+		// PromQL 写操作
+		adminGroup.POST("/promql", createPromQL)
+		adminGroup.PUT("/promql/:id", updatePromQL)
+		adminGroup.DELETE("/promql/:id", deletePromQL)
 	}
 }
 

@@ -34,6 +34,7 @@ type LDAPConfig struct {
 	DisplayAttr  string `yaml:"display_name_attr"`
 	EmailAttr    string `yaml:"email_attr"`
 	DefaultRole  string `yaml:"default_role"`
+	AdminGroupDN string `yaml:"admin_group_dn"`
 }
 
 func LoadConfig(path string) (*Config, error) {

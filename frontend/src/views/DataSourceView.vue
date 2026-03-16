@@ -5,7 +5,7 @@
         <h3>数据源</h3>
         <p>管理 Prometheus 数据源连接</p>
       </div>
-      <button class="btn btn-primary" @click="openAddModal">
+      <button v-if="isAdmin" class="btn btn-primary" @click="openAddModal">
         <IconPlus :size="16" />
         添加数据源
       </button>
@@ -15,7 +15,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th><th>名称</th><th>URL</th><th>操作</th>
+            <th>ID</th><th>名称</th><th>URL</th><th v-if="isAdmin">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -23,7 +23,7 @@
             <td>{{ src.id }}</td>
             <td>{{ src.name }}</td>
             <td>{{ src.url }}</td>
-            <td>
+            <td v-if="isAdmin">
               <div class="action-group">
                 <button class="btn-icon" @click="openEditModal(src)" title="编辑">
                   <IconEdit :size="16" />
@@ -65,9 +65,12 @@
 import { ref } from 'vue'
 import { useCrudList } from '../composables/useCrudList'
 import { usePolling } from '../composables/usePolling'
+import { useAuthStore } from '../stores/auth'
 import ModalDialog from '../components/ModalDialog.vue'
 import { IconPlus, IconEdit, IconTrash } from '../components/icons'
 import type { MetricsSource } from '../types'
+
+const { isAdmin } = useAuthStore()
 
 const { items, fetchList, addItem, updateItem, deleteItem, validateRequired } =
   useCrudList<MetricsSource>('/api/metrics_source', '数据源')

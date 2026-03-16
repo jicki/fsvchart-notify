@@ -11,7 +11,7 @@
           <IconChevronUp v-else :size="16" />
           {{ expandable.isAllExpandedFor(promqls.length) ? '收起所有' : '展开所有' }}
         </button>
-        <button class="btn btn-primary" @click="openAddModal">
+        <button v-if="isAdmin" class="btn btn-primary" @click="openAddModal">
           <IconPlus :size="16" />
           添加查询
         </button>
@@ -30,7 +30,7 @@
             <th style="width: 30%">查询语句</th>
             <th style="width: 10%">创建时间</th>
             <th style="width: 10%">更新时间</th>
-            <th style="width: 10%">操作</th>
+            <th v-if="isAdmin" style="width: 10%">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -50,7 +50,7 @@
             </td>
             <td>{{ formatDate(promql.created_at) }}</td>
             <td>{{ formatDate(promql.updated_at) }}</td>
-            <td>
+            <td v-if="isAdmin">
               <div class="action-group">
                 <button class="btn-icon" @click="openEditModal(promql)" title="编辑">
                   <IconEdit :size="16" />
@@ -112,9 +112,12 @@ import { useNotification } from '../composables/useNotification'
 import { usePolling } from '../composables/usePolling'
 import { useExpandable } from '../composables/useExpandable'
 import { usePromqlHighlight } from '../composables/usePromqlHighlight'
+import { useAuthStore } from '../stores/auth'
 import ModalDialog from '../components/ModalDialog.vue'
 import { IconPlus, IconEdit, IconTrash, IconCopy, IconChevronDown, IconChevronUp } from '../components/icons'
 import type { PromQL } from '../types'
+
+const { isAdmin } = useAuthStore()
 
 const { showSuccess, showError } = useNotification()
 const expandable = useExpandable()
