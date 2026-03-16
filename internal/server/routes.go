@@ -2084,6 +2084,11 @@ func RegisterRoutes(r *gin.Engine) {
 		adminGroup.POST("/promql", createPromQL)
 		adminGroup.PUT("/promql/:id", updatePromQL)
 		adminGroup.DELETE("/promql/:id", deletePromQL)
+
+		// 用户管理（仅管理员）
+		adminGroup.GET("/users", listUsers)
+		adminGroup.PUT("/users/:id/role", updateUserRole)
+		adminGroup.PUT("/users/:id/password", adminResetPassword)
 	}
 }
 

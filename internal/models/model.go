@@ -115,3 +115,13 @@ type UpdateUserRequest struct {
 	DisplayName string `json:"display_name"`
 	Email       string `json:"email"`
 }
+
+// UpdateUserRoleRequest 修改用户角色请求结构体
+type UpdateUserRoleRequest struct {
+	Role string `json:"role" binding:"required"`
+}
+
+// AdminResetPasswordRequest 管理员重置密码请求结构体
+type AdminResetPasswordRequest struct {
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}

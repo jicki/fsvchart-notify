@@ -258,6 +258,70 @@ func UpdateUserPassword(username, oldPassword, newPassword string) error {
 	return err
 }
 
+// GetAllUsers 获取所有用户列表
+func GetAllUsers() ([]models.User, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, errors.New("database connection failed")
+	}
+
+	rows, err := db.Query(`
+		SELECT id, username, COALESCE(display_name, '') as display_name,
+		       COALESCE(email, '') as email, role, created_at, updated_at
+		FROM users
+		ORDER BY id ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var user models.User
+		var createdAt, updatedAt string
+		if err := rows.Scan(&user.ID, &user.Username, &user.DisplayName,
+			&user.Email, &user.Role, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		user.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		user.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+// UpdateUserRole 更新用户角色
+func UpdateUserRole(userID int64, role string) error {
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database connection failed")
+	}
+
+	_, err := db.Exec(`
+		UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, role, userID)
+	return err
+}
+
+// AdminResetPassword 管理员重置用户密码
+func AdminResetPassword(userID int64, newPassword string) error {
+	db := database.GetDB()
+	if db == nil {
+		return errors.New("database connection failed")
+	}
+
+	hashedPassword, err := HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("密码加密失败: %w", err)
+	}
+
+	_, err = db.Exec(`
+		UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+	`, hashedPassword, userID)
+	return err
+}
+
 // UpdateUserInfo 更新用户信息
 func UpdateUserInfo(username string, info models.UpdateUserRequest) error {
 	db := database.GetDB()

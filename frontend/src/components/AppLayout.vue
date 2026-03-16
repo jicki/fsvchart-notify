@@ -25,6 +25,20 @@
           <component :is="item.icon" :size="20" />
           <span v-show="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
         </RouterLink>
+
+        <template v-if="authStore.isAdmin">
+          <div class="nav-divider"></div>
+          <RouterLink
+            v-for="item in adminNavItems"
+            :key="item.path"
+            :to="item.path"
+            class="nav-item"
+            :title="sidebarCollapsed ? item.label : ''"
+          >
+            <component :is="item.icon" :size="20" />
+            <span v-show="!sidebarCollapsed" class="nav-label">{{ item.label }}</span>
+          </RouterLink>
+        </template>
       </nav>
 
       <div class="sidebar-footer">
@@ -55,11 +69,11 @@ import {
   IconChevronRight,
   IconUser,
   IconLogOut,
-  IconDatabase,
-  IconWebhook,
   IconCode,
   IconSend,
-  IconFileText
+  IconFileText,
+  IconSettings,
+  IconUsers
 } from './icons'
 
 const router = useRouter()
@@ -75,11 +89,14 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/datasources', label: '数据源', icon: IconDatabase },
-  { path: '/webhooks', label: 'WebHook', icon: IconWebhook },
-  { path: '/promql', label: 'PromQL', icon: IconCode },
   { path: '/push-tasks', label: '推送任务', icon: IconSend },
+  { path: '/promql', label: 'PromQL', icon: IconCode },
   { path: '/send-records', label: '发送记录', icon: IconFileText },
+]
+
+const adminNavItems: NavItem[] = [
+  { path: '/system', label: '系统管理', icon: IconSettings },
+  { path: '/users', label: '用户管理', icon: IconUsers },
 ]
 
 function toggleSidebar() {
@@ -199,7 +216,8 @@ onMounted(() => {
   border-radius: var(--radius-md);
   color: var(--color-text-sidebar);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
   transition: all var(--transition-fast);
   white-space: nowrap;
   overflow: hidden;
@@ -226,6 +244,12 @@ onMounted(() => {
 .nav-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nav-divider {
+  height: 1px;
+  background: var(--color-border-sidebar);
+  margin: 8px 12px;
 }
 
 .collapsed .nav-item {

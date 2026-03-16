@@ -19,14 +19,14 @@ const router = createRouter({
           redirect: '/push-tasks'
         },
         {
-          path: 'datasources',
-          name: 'datasources',
-          component: () => import('../views/DataSourceView.vue')
+          path: 'system',
+          name: 'system',
+          component: () => import('../views/SystemManageView.vue')
         },
         {
-          path: 'webhooks',
-          name: 'webhooks',
-          component: () => import('../views/WebhookView.vue')
+          path: 'users',
+          name: 'users',
+          component: () => import('../views/UserManageView.vue')
         },
         {
           path: 'promql',

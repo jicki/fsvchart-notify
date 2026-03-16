@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strconv"
 
 	"fsvchart-notify/internal/models"
 	"fsvchart-notify/internal/service"
@@ -159,5 +160,102 @@ func updateUserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code":    200,
 		"message": "User information updated successfully",
+	})
+}
+
+// 获取所有用户列表（仅管理员）
+func listUsers(c *gin.Context) {
+	users, err := service.GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "获取用户列表失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, users)
+}
+
+// 修改用户角色（仅管理员）
+func updateUserRole(c *gin.Context) {
+	idStr := c.Param("id")
+	userID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的用户 ID",
+		})
+		return
+	}
+
+	var req models.UpdateUserRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求格式错误",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 校验 role 值
+	if req.Role != "admin" && req.Role != "user" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "角色只能为 admin 或 user",
+		})
+		return
+	}
+
+	if err := service.UpdateUserRole(userID, req.Role); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "修改角色失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "角色修改成功",
+	})
+}
+
+// 管理员重置用户密码
+func adminResetPassword(c *gin.Context) {
+	idStr := c.Param("id")
+	userID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "无效的用户 ID",
+		})
+		return
+	}
+
+	var req models.AdminResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    400,
+			"message": "请求格式错误",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if err := service.AdminResetPassword(userID, req.NewPassword); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code":    500,
+			"message": "重置密码失败",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "密码重置成功",
 	})
 }

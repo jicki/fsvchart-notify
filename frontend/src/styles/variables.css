@@ -32,11 +32,11 @@
   --color-bg-sidebar-active: rgba(56, 189, 248, 0.15);
 
   /* 文字色 */
-  --color-text: #f1f5f9;
-  --color-text-secondary: #b0bec5;
-  --color-text-muted: #8892a4;
+  --color-text: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted: #94a3b8;
   --color-text-white: #ffffff;
-  --color-text-sidebar: #94a3b8;
+  --color-text-sidebar: #cbd5e1;
 
   /* 边框色 */
   --color-border: #334155;
