@@ -93,13 +93,15 @@
       @remove="form.removeSendTime"
     />
 
-    <div class="form-group checkbox-group">
+    <div class="checkbox-group">
       <label class="toggle">
         <input type="checkbox" v-model="form.showDataLabel.value">
         <span class="toggle-track"></span>
-        <span>显示曲线数值</span>
+        <span class="toggle-content">
+          <span>显示曲线数值</span>
+          <span class="form-hint">在图表中显示数据点的具体数值</span>
+        </span>
       </label>
-      <div class="form-hint">在图表中显示数据点的具体数值</div>
     </div>
 
     <div v-if="!hideActions" class="form-actions">
@@ -165,7 +167,18 @@ function handleSubmit() {
 }
 
 .checkbox-group {
-  margin-top: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+}
+
+.toggle-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-content .form-hint {
+  margin-top: 0;
 }
 
 .form-actions {
