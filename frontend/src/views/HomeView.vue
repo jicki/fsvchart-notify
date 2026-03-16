@@ -12,8 +12,7 @@
       <button :class="{active: currentTab==='pushTasks'}" @click="currentTab='pushTasks'">Push Tasks</button>
     </div>
 
-    <!-- 不同 tab 显示不同子组件 -->
-    <div class="tab-content">
+    <div class="tab-panel">
       <component :is="tabs[currentTab]" />
     </div>
   </div>
@@ -21,8 +20,6 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-
-// 导入子组件
 import DataSourceView from './DataSourceView.vue'
 import WebhookView from './WebhookView.vue'
 import ChartTemplatesView from './ChartTemplatesView.vue'
@@ -31,8 +28,7 @@ import PushTasksView from './PushTasksView.vue'
 
 const currentTab = ref('datasource')
 
-// 定义组件选项
-const tabs = {
+const tabs: Record<string, unknown> = {
   datasource: DataSourceView,
   webhook: WebhookView,
   chartTemplates: ChartTemplatesView,
@@ -41,68 +37,53 @@ const tabs = {
 }
 </script>
 
-<!-- 注意：此处不使用 scoped，方便所有子组件继承这些公共样式 -->
-<style>
+<style scoped>
 .home-container {
   height: 100%;
 }
 
 .dashboard-header {
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .dashboard-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--color-text);
 }
 
 .tabs {
-  margin-bottom:12px;
-  border-bottom: 1px solid #e9ecef;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--color-border-light);
   padding-bottom: 10px;
 }
 
-button {
-  margin-right:8px;
-  padding:6px 12px;
-  cursor:pointer;
-  background: #fff;
-  border: 1px solid #e9ecef;
-  border-radius: 4px;
+.tabs button {
+  margin-right: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
   transition: all 0.2s;
 }
 
-button.active {
-  background: #007bff;
-  color: #fff;
-  border-color: #007bff;
-  font-weight:bold;
+.tabs button.active {
+  background: var(--color-primary);
+  color: var(--color-text-white);
+  border-color: var(--color-primary);
+  font-weight: bold;
 }
 
-button:hover {
-  background: #f8f9fa;
+.tabs button:hover {
+  background: var(--color-bg-hover);
 }
 
-button.active:hover {
-  background: #0056b3;
+.tabs button.active:hover {
+  background: var(--color-primary-hover);
 }
 
-/* 通用 .tab-content, table 样式 */
-.tab-content {
-  padding:16px;
-  margin-bottom:24px;
-  background: #fff;
-}
-
-table {
-  margin-top:10px;
-  width:100%;
-  border-collapse:collapse;
-}
-
-th,td {
-  border:1px solid #ccc;
-  padding:4px 8px;
-  text-align:left;
+.tab-panel {
+  padding: var(--spacing-lg);
+  background: var(--color-bg-white);
 }
 </style>

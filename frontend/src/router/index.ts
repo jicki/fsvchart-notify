@@ -1,7 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import LoginView from '../views/LoginView.vue'
-import UserProfileView from '../views/UserProfileView.vue'
+import { getToken } from '../utils/storage'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -9,18 +7,18 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView,
+      component: () => import('../views/HomeView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/login',
       name: 'login',
-      component: LoginView
+      component: () => import('../views/LoginView.vue')
     },
     {
       path: '/profile',
       name: 'profile',
-      component: UserProfileView,
+      component: () => import('../views/UserProfileView.vue'),
       meta: { requiresAuth: true }
     },
     {
@@ -29,7 +27,6 @@ const router = createRouter({
       component: () => import('../views/RunLogsView.vue'),
       meta: { requiresAuth: true }
     },
-    // Add a catch-all route to redirect to login
     {
       path: '/:pathMatch(.*)*',
       redirect: '/login'
@@ -38,20 +35,17 @@ const router = createRouter({
 })
 
 // 全局前置守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const token = localStorage.getItem('token')
-  
+  const token = getToken()
+
   if (requiresAuth && !token) {
-    // 需要认证但未登录，重定向到登录页
     next({ name: 'login' })
   } else if (to.name === 'login' && token) {
-    // 已登录用户访问登录页，重定向到首页
     next({ name: 'home' })
   } else {
-    // 其他情况正常导航
     next()
   }
 })
 
-export default router 
+export default router

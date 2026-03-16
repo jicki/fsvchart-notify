@@ -2,9 +2,9 @@
   <div class="tab-content">
     <h3>数据源</h3>
     <div>
-      <label>名称: <input v-model="newSourceName"/></label>
-      <label>URL: <input v-model="newSourceURL"/></label>
-      <button @click="addMetricsSource">添加数据源</button>
+      <label>名称: <input v-model="newName" /></label>
+      <label>URL: <input v-model="newURL" /></label>
+      <button @click="handleAdd">添加数据源</button>
     </div>
 
     <table>
@@ -14,30 +14,26 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="src in metricsSources" :key="src.id">
+        <tr v-for="src in items" :key="src.id">
           <td>{{ src.id }}</td>
-          <td v-if="editSourceID===src.id">
-            <input v-model="editSourceName"/>
+          <td v-if="editingId === src.id">
+            <input v-model="editName" />
           </td>
-          <td v-else>
-            {{ src.name }}
-          </td>
+          <td v-else>{{ src.name }}</td>
 
-          <td v-if="editSourceID===src.id">
-            <input v-model="editSourceURL"/>
+          <td v-if="editingId === src.id">
+            <input v-model="editURL" />
           </td>
-          <td v-else>
-            {{ src.url }}
-          </td>
+          <td v-else>{{ src.url }}</td>
 
           <td>
-            <div v-if="editSourceID===src.id">
-              <button @click="saveEditSource(src.id)">保存</button>
-              <button @click="cancelEditSource">取消</button>
+            <div v-if="editingId === src.id">
+              <button @click="handleSave(src.id)">保存</button>
+              <button @click="cancelEdit">取消</button>
             </div>
             <div v-else>
-              <button @click="startEditSource(src)">编辑</button>
-              <button @click="deleteMetricsSource(src.id)">删除</button>
+              <button @click="handleStartEdit(src)">编辑</button>
+              <button @click="deleteItem(src.id)">删除</button>
             </div>
           </td>
         </tr>
@@ -47,168 +43,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { get, post, put, del } from '../utils/api'
+import { ref } from 'vue'
+import { useCrudList } from '../composables/useCrudList'
+import { usePolling } from '../composables/usePolling'
+import type { MetricsSource } from '../types'
 
-const metricsSources = ref<any[]>([])
-const newSourceName = ref('')
-const newSourceURL = ref('')
-const editSourceID = ref<number|null>(null)
-const editSourceName = ref('')
-const editSourceURL = ref('')
+const { items, editingId, fetchList, addItem, updateItem, deleteItem, startEdit, cancelEdit, validateRequired } =
+  useCrudList<MetricsSource>('/api/metrics_source', '数据源')
 
-async function fetchMetricsSources() {
-  try {
-    const data = await get('/api/metrics_source')
-    if (Array.isArray(data)) {
-      metricsSources.value = data
-      console.log('成功获取数据源列表:', data.length)
-    } else {
-      console.error('获取数据源返回格式错误:', data)
-    }
-  } catch (err) {
-    console.error('获取数据源失败:', err)
-    metricsSources.value = [] // 确保失败时设置为空数组
+const newName = ref('')
+const newURL = ref('')
+const editName = ref('')
+const editURL = ref('')
+
+async function handleAdd() {
+  if (!validateRequired({ [newName.value]: '名称', [newURL.value]: 'URL' })) return
+  const success = await addItem({ name: newName.value, url: newURL.value } as Partial<MetricsSource>)
+  if (success) {
+    newName.value = ''
+    newURL.value = ''
   }
 }
 
-async function addMetricsSource() {
-  if(!newSourceName.value || !newSourceURL.value){
-    alert('名称或URL不能为空')
-    return
-  }
-  
-  try {
-    const body = { name: newSourceName.value, url: newSourceURL.value }
-    const result = await post('/api/metrics_source', body)
-    console.log('添加数据源成功:', result)
-    
-    // 重置表单
-    newSourceName.value = ''
-    newSourceURL.value = ''
-    
-    // 刷新列表并通知更新
-    await fetchMetricsSources()
-  } catch (err) {
-    console.error('添加数据源失败:', err)
-    alert('添加数据源失败，请重试')
-  }
+function handleStartEdit(src: MetricsSource) {
+  startEdit(src.id)
+  editName.value = src.name
+  editURL.value = src.url
 }
 
-function startEditSource(src:any){
-  editSourceID.value = src.id
-  editSourceName.value = src.name
-  editSourceURL.value = src.url
+async function handleSave(id: number) {
+  if (!validateRequired({ [editName.value]: '名称', [editURL.value]: 'URL' })) return
+  await updateItem(id, { name: editName.value, url: editURL.value } as Partial<MetricsSource>)
 }
 
-function cancelEditSource(){
-  editSourceID.value = null
-  editSourceName.value = ''
-  editSourceURL.value = ''
-}
-
-async function saveEditSource(id:number){
-  if(!editSourceName.value || !editSourceURL.value){
-    alert('名称或URL不能为空')
-    return
-  }
-
-  try {
-    const body = { name: editSourceName.value, url: editSourceURL.value }
-    const result = await put(`/api/metrics_source/${id}`, body)
-    console.log('更新数据源成功:', result)
-    
-    // 重置编辑状态
-    editSourceID.value = null
-    editSourceName.value = ''
-    editSourceURL.value = ''
-    
-    // 刷新列表并通知更新
-    await fetchMetricsSources()
-  } catch (err) {
-    console.error('更新数据源失败:', err)
-    alert('更新数据源失败，请重试')
-  }
-}
-
-async function deleteMetricsSource(id:number){
-  if(!confirm(`确认删除数据源ID=${id}？`)) return
-  
-  try {
-    await del(`/api/metrics_source/${id}`)
-    console.log('删除数据源成功:', id)
-    
-    // 刷新列表并通知更新
-    await fetchMetricsSources()
-  } catch (err) {
-    console.error('删除数据源失败:', err)
-    alert('删除数据源失败，请重试')
-  }
-}
-
-// 定期刷新数据
-let refreshInterval: number
-
-onMounted(() => {
-  // 初始加载
-  fetchMetricsSources()
-  
-  // 设置定期刷新
-  refreshInterval = setInterval(() => {
-    fetchMetricsSources()
-  }, 30000) // 每30秒刷新一次
-})
-
-onUnmounted(() => {
-  // 清理定时器
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+usePolling(fetchList, 30000)
 </script>
 
 <style scoped>
-.tab-content {
-  padding: 20px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
-}
-
-th, td {
-  padding: 8px;
-  text-align: left;
-  border-bottom: 1px solid #ddd;
-}
-
-th {
-  background-color: #f5f5f5;
-}
-
-button {
-  margin: 0 5px;
-  padding: 5px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  background-color: #fff;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #f5f5f5;
-}
-
-input {
-  padding: 5px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  margin-right: 10px;
-}
-
-label {
-  margin-right: 15px;
-}
+.tab-content { padding: 20px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--color-border, #ddd); }
+th { background-color: var(--color-bg-light, #f5f5f5); }
+button { margin: 0 5px; padding: 5px 10px; border: 1px solid var(--color-border, #ddd); border-radius: 4px; background-color: #fff; cursor: pointer; }
+button:hover { background-color: var(--color-bg-light, #f5f5f5); }
+input { padding: 5px; border: 1px solid var(--color-border, #ddd); border-radius: 4px; margin-right: 10px; }
+label { margin-right: 15px; }
 </style>

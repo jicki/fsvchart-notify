@@ -6,21 +6,21 @@
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="username">用户名</label>
-          <input 
-            type="text" 
-            id="username" 
-            v-model="username" 
-            required 
+          <input
+            type="text"
+            id="username"
+            v-model="username"
+            required
             placeholder="请输入用户名"
           />
         </div>
         <div class="form-group">
           <label for="password">密码</label>
-          <input 
-            type="password" 
-            id="password" 
-            v-model="password" 
-            required 
+          <input
+            type="password"
+            id="password"
+            v-model="password"
+            required
             placeholder="请输入密码"
           />
         </div>
@@ -35,14 +35,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const username = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
-const debug = ref(false) // Set to false in production
-const debugInfo = ref('')
 
 const handleLogin = async () => {
   error.value = ''
@@ -51,9 +51,7 @@ const handleLogin = async () => {
   try {
     const response = await fetch('/api/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         username: username.value,
         password: password.value
@@ -66,22 +64,17 @@ const handleLogin = async () => {
       throw new Error(data.message || data.error || '登录失败')
     }
 
-    // 保存令牌和用户信息到本地存储
-    localStorage.setItem('token', data.token)
-    localStorage.setItem('user', JSON.stringify({
+    authStore.login(data.token, {
       username: data.username,
       displayName: data.display_name,
       role: data.role
-    }))
+    })
 
-    // 触发一个全局事件，通知应用程序登录状态已更改
     window.dispatchEvent(new Event('storage'))
-
-    // 重定向到首页
     router.push('/')
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Login error:', err)
-    error.value = err.message || '登录失败，请稍后重试'
+    error.value = err instanceof Error ? err.message : '登录失败，请稍后重试'
   } finally {
     loading.value = false
   }
@@ -89,84 +82,14 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background-color: #f5f5f5;
-}
-
-.login-box {
-  width: 400px;
-  padding: 30px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-h2 {
-  text-align: center;
-  margin-bottom: 24px;
-  color: #333;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-input {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 16px;
-}
-
-button {
-  width: 100%;
-  padding: 12px;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-button:hover {
-  background: #0056b3;
-}
-
-button:disabled {
-  background: #cccccc;
-  cursor: not-allowed;
-}
-
-.error-message {
-  background: #f8d7da;
-  color: #721c24;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-}
-
-.debug-info {
-  background: #e8f4ff;
-  color: #0c5460;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 20px;
-  font-family: monospace;
-  font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-</style> 
+.login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--color-bg-page, #f5f5f5); }
+.login-box { width: 400px; padding: 30px; background: white; border-radius: var(--radius-lg, 8px); box-shadow: var(--shadow-md, 0 2px 10px rgba(0, 0, 0, 0.1)); }
+h2 { text-align: center; margin-bottom: 24px; color: var(--color-text, #333); }
+.form-group { margin-bottom: 20px; }
+label { display: block; margin-bottom: 8px; font-weight: 500; }
+input { width: 100%; padding: 10px; border: 1px solid var(--color-border, #ddd); border-radius: var(--radius-md, 4px); font-size: 16px; }
+button { width: 100%; padding: 12px; background: var(--color-primary, #007bff); color: white; border: none; border-radius: var(--radius-md, 4px); font-size: 16px; cursor: pointer; transition: background 0.3s; }
+button:hover { background: var(--color-primary-hover, #0056b3); }
+button:disabled { background: var(--color-bg-disabled, #cccccc); cursor: not-allowed; }
+.error-message { background: var(--color-error-bg, #f8d7da); color: var(--color-error-text, #721c24); padding: 10px; border-radius: var(--radius-md, 4px); margin-bottom: 20px; }
+</style>

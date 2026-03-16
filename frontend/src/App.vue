@@ -2,136 +2,75 @@
   <div class="app-container">
     <header class="app-header">
       <h1>fsvchart-notify Manager</h1>
-      
-      <div v-if="isLoggedIn" class="user-info">
-        <span>{{ userDisplayName }}</span>
+
+      <div v-if="authStore.isLoggedIn" class="user-info">
+        <span>{{ authStore.userDisplayName }}</span>
         <div class="dropdown">
           <button class="dropdown-toggle">
-            <span class="user-icon">👤</span>
+            <svg class="user-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
           </button>
           <div class="dropdown-menu">
             <RouterLink to="/profile">个人信息</RouterLink>
-            <a href="#" @click.prevent="logout">退出登录</a>
+            <a href="#" @click.prevent="handleLogout">退出登录</a>
           </div>
         </div>
       </div>
     </header>
-    
-    <nav v-if="isLoggedIn">
+
+    <nav v-if="authStore.isLoggedIn">
       <RouterLink to="/">首页</RouterLink>
       <RouterLink to="/send-records">发送记录</RouterLink>
     </nav>
-    
+
     <div class="main-content">
       <RouterView />
     </div>
+
+    <AppNotification />
   </div>
 </template>
 
 <script setup lang="ts">
-import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
-import { ref, onMounted, computed, watch } from 'vue'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
+import { onMounted, onUnmounted } from 'vue'
+import { useAuthStore } from './stores/auth'
+import AppNotification from './components/AppNotification.vue'
 
 const router = useRouter()
-const route = useRoute()
-const isLoggedIn = ref(false)
-const userInfo = ref<any>(null)
-const showDebug = ref(false) // Set to false in production
+const authStore = useAuthStore()
 
-// 计算属性：用户显示名称
-const userDisplayName = computed(() => {
-  if (!userInfo.value) return ''
-  return userInfo.value.displayName || userInfo.value.username || ''
+function handleLogout() {
+  authStore.logout()
+  router.push('/login')
+}
+
+function onStorageChange() {
+  authStore.checkAuth()
+}
+
+onMounted(() => {
+  window.addEventListener('storage', onStorageChange)
 })
 
-// 检查登录状态
-const checkLoginStatus = () => {
-  const token = localStorage.getItem('token')
-  const user = localStorage.getItem('user')
-  
-  if (token && user) {
-    isLoggedIn.value = true
-    try {
-      userInfo.value = JSON.parse(user)
-    } catch (e) {
-      console.error('Failed to parse user info:', e)
-      userInfo.value = null
-    }
-  } else {
-    isLoggedIn.value = false
-    userInfo.value = null
-  }
-}
-
-// 退出登录
-const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  isLoggedIn.value = false
-  userInfo.value = null
-  router.push('/login')
-}
-
-// 清除存储（用于调试）
-const clearStorage = () => {
-  localStorage.clear()
-  checkLoginStatus()
-  router.push('/login')
-}
-
-// 监听路由变化，每次路由变化时检查登录状态
-watch(
-  () => route.path,
-  () => {
-    checkLoginStatus()
-  }
-)
-
-// 组件挂载时检查登录状态
-onMounted(() => {
-  checkLoginStatus()
-  
-  // 监听 storage 事件，用于在登录/登出时更新状态
-  window.addEventListener('storage', checkLoginStatus)
-  
-  // 组件卸载时移除事件监听
-  return () => {
-    window.removeEventListener('storage', checkLoginStatus)
-  }
+onUnmounted(() => {
+  window.removeEventListener('storage', onStorageChange)
 })
 </script>
 
 <style>
-body {
-  margin: 0;
-  font-family: sans-serif;
-  background: #f5f5f5;
-}
-
 .app-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.debug-info {
-  background: #ffe;
-  padding: 10px;
-  border: 1px solid #ddd;
-  margin: 10px;
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.debug-info button {
-  margin-right: 10px;
-  padding: 5px;
-}
-
 .app-header {
-  padding: 0 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  padding: 0 var(--spacing-lg);
+  background: var(--color-bg-light);
+  border-bottom: 1px solid var(--color-border-light);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -140,7 +79,7 @@ body {
   z-index: 100;
 }
 
-h1 {
+.app-header h1 {
   margin: 0;
   padding: 15px 0;
   font-size: 1.5rem;
@@ -150,6 +89,10 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.user-icon {
+  color: var(--color-text-secondary);
 }
 
 .dropdown {
@@ -162,25 +105,23 @@ h1 {
   border: none;
   cursor: pointer;
   padding: 5px;
-}
-
-.user-icon {
-  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
 }
 
 .dropdown-menu {
   display: none;
   position: absolute;
   right: 0;
-  background-color: white;
+  background-color: var(--color-bg-white);
   min-width: 120px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-dropdown);
   z-index: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 
 .dropdown-menu a {
-  color: #333;
+  color: var(--color-text);
   padding: 10px 15px;
   text-decoration: none;
   display: block;
@@ -188,7 +129,7 @@ h1 {
 }
 
 .dropdown-menu a:hover {
-  background-color: #f5f5f5;
+  background-color: var(--color-bg-hover);
 }
 
 .dropdown:hover .dropdown-menu {
@@ -196,9 +137,9 @@ h1 {
 }
 
 nav {
-  padding: 10px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e9ecef;
+  padding: 10px var(--spacing-lg);
+  background: var(--color-bg-white);
+  border-bottom: 1px solid var(--color-border-light);
   display: flex;
   align-items: center;
 }
@@ -206,26 +147,26 @@ nav {
 nav a {
   margin-right: 15px;
   text-decoration: none;
-  color: #666;
+  color: var(--color-text-secondary);
   padding: 5px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 
 nav a:hover {
-  background: #f8f9fa;
+  background: var(--color-bg-hover);
 }
 
 nav a.router-link-active {
-  color: #007bff;
+  color: var(--color-primary);
   font-weight: bold;
 }
 
 .main-content {
   flex: 1;
-  padding: 20px;
-  background: #fff;
-  margin: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: var(--spacing-lg);
+  background: var(--color-bg-white);
+  margin: var(--spacing-lg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 </style>

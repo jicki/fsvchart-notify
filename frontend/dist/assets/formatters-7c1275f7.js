@@ -1,0 +1,1 @@
+function a(t){if(!t)return"未设置";const n=t.match(/^(\d+)([hHdDmM])$/);if(!n)return t;const[,r,o]=n;return`${r}${{h:"小时",H:"小时",d:"天",D:"天",m:"分钟",M:"月"}[o]||o}`}function e(t){const n=["周一","周二","周三","周四","周五","周六","周日"],r=typeof t=="string"?parseInt(t):t;return n[r-1]||"未知"}function c(t){return t?new Date(t).toLocaleString():""}export{a,c as f,e as g};
