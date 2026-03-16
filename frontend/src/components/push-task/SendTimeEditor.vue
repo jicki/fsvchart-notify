@@ -13,7 +13,7 @@
           <option value="7">周日</option>
         </select>
         <input class="form-input" type="time" v-model="time.send_time" required />
-        <button type="button" class="btn-icon" @click="$emit('remove', index)" title="删除" style="color: var(--color-danger)">
+        <button type="button" class="btn-icon btn-icon-danger" @click="$emit('remove', index)" title="删除">
           <IconTrash :size="16" />
         </button>
       </div>
@@ -55,11 +55,5 @@ defineEmits<{
 .send-time-item .form-input {
   width: auto;
   min-width: 120px;
-}
-
-.form-hint {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-top: 4px;
 }
 </style>

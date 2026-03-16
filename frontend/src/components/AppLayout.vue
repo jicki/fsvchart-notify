@@ -132,7 +132,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--color-border-sidebar);
   min-height: 60px;
 }
 
@@ -233,7 +233,7 @@ onMounted(() => {
 /* 侧边栏底部 */
 .sidebar-footer {
   padding: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--color-border-sidebar);
 }
 
 .user-info {

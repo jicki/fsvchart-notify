@@ -102,7 +102,8 @@ const handleLogin = async () => {
 }
 
 .login-card {
-  width: 400px;
+  width: 100%;
+  max-width: 400px;
   padding: 40px;
   background: var(--color-bg-white);
   border-radius: var(--radius-xl);
@@ -140,31 +141,9 @@ const handleLogin = async () => {
   font-size: 14px;
 }
 
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  font-size: 14px;
-  color: var(--color-text);
-}
-
-.form-input {
-  width: 100%;
+.login-card .form-input {
   padding: 12px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   font-size: 15px;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
 .login-btn {
@@ -173,14 +152,5 @@ const handleLogin = async () => {
   font-size: 15px;
   font-weight: 600;
   margin-top: 8px;
-}
-
-.error-message {
-  background: var(--color-error-bg);
-  color: var(--color-error-text);
-  padding: 12px 16px;
-  border-radius: var(--radius-md);
-  margin-bottom: 20px;
-  font-size: 14px;
 }
 </style>

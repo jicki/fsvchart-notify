@@ -55,10 +55,4 @@ const selectedIds = defineModel<number[]>('selectedIds', { default: () => [] })
   gap: 8px;
   font-size: 14px;
 }
-
-.form-hint {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-top: 4px;
-}
 </style>

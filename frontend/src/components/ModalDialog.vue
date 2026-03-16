@@ -50,7 +50,7 @@ watch(() => props.visible, (val) => {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
   display: flex;
   align-items: flex-start;
   justify-content: center;

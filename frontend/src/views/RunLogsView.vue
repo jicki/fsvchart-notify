@@ -112,12 +112,6 @@ function getBadgeClass(status: string): string {
 </script>
 
 <style scoped>
-.header-actions {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-}
-
 .toggle-label {
   font-size: 14px;
   color: var(--color-text-secondary);
@@ -186,16 +180,6 @@ function getBadgeClass(status: string): string {
 
 .record-detail div {
   margin-bottom: 2px;
-}
-
-.link {
-  color: var(--color-accent);
-  text-decoration: underline;
-  word-break: break-all;
-}
-
-.link:hover {
-  text-decoration: none;
 }
 
 .error-state {

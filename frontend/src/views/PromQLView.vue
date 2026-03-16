@@ -55,10 +55,10 @@
                 <button class="btn-icon" @click="openEditModal(promql)" title="编辑">
                   <IconEdit :size="16" />
                 </button>
-                <button class="btn-icon" @click="copyPromQL(promql)" title="复制" style="color: var(--color-purple)">
+                <button class="btn-icon btn-icon-purple" @click="copyPromQL(promql)" title="复制">
                   <IconCopy :size="16" />
                 </button>
-                <button class="btn-icon" @click="deletePromQL(promql.id)" title="删除" style="color: var(--color-danger)">
+                <button class="btn-icon btn-icon-danger" @click="deletePromQL(promql.id)" title="删除">
                   <IconTrash :size="16" />
                 </button>
               </div>
@@ -301,39 +301,6 @@ async function copyPromQL(promql: PromQL) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.action-group {
-  display: flex;
-  gap: 2px;
-  align-items: center;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
-}
-
-/* PromQL 语法高亮 */
-:deep(.keyword) {
-  color: var(--color-primary);
-  font-weight: 500;
-}
-
-:deep(.label) {
-  color: #ec4899;
-}
-
-:deep(.number) {
-  color: #059669;
-}
-
-:deep(.unit) {
-  color: var(--color-primary);
-  font-weight: 500;
 }
 
 @media (max-width: 1200px) {

@@ -174,10 +174,6 @@ onMounted(fetchUserInfo)
   color: var(--color-text);
 }
 
-.form-input {
-  width: 100%;
-}
-
 @media (max-width: 768px) {
   .profile-grid {
     grid-template-columns: 1fr;

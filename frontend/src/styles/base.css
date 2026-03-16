@@ -333,7 +333,7 @@ body {
   left: 2px;
   width: 16px;
   height: 16px;
-  background: white;
+  background: var(--color-bg-white);
   border-radius: 50%;
   transition: transform var(--transition-fast);
 }
@@ -345,4 +345,123 @@ body {
 /* 通用 tab 内容区域 */
 .tab-content {
   padding: var(--spacing-lg);
+}
+
+/* ======== 间距工具类 ======== */
+.mb-sm { margin-bottom: var(--spacing-sm); }
+.mb-md { margin-bottom: var(--spacing-md); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+.mb-xl { margin-bottom: var(--spacing-xl); }
+.mt-sm { margin-top: var(--spacing-sm); }
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+.mt-xl { margin-top: var(--spacing-xl); }
+
+/* ======== 文本工具类 ======== */
+.text-danger { color: var(--color-danger); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-purple { color: var(--color-purple); }
+.text-muted { color: var(--color-text-muted); font-style: italic; font-size: 14px; }
+
+/* ======== Flex 工具类 ======== */
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+
+/* ======== 共用模式 ======== */
+.action-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.form-hint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+}
+
+.form-actions-inline {
+  display: flex;
+  gap: 8px;
+  padding-bottom: var(--spacing-md);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.link:hover {
+  text-decoration: none;
+}
+
+/* ======== 图标按钮变体 ======== */
+.btn-icon-danger { color: var(--color-danger); }
+.btn-icon-danger:hover { color: var(--color-danger-hover); background: var(--color-error-bg); }
+.btn-icon-success { color: var(--color-success); }
+.btn-icon-success:hover { color: var(--color-success-hover); background: var(--color-success-bg); }
+.btn-icon-warning { color: var(--color-warning); }
+.btn-icon-warning:hover { color: var(--color-warning-hover); background: var(--color-warning-bg); }
+.btn-icon-purple { color: var(--color-purple); }
+.btn-icon-purple:hover { color: var(--color-purple-hover); background: #f5f3ff; }
+
+/* ======== 卡片标题 ======== */
+.card-title {
+  margin-top: 0;
+  margin-bottom: var(--spacing-md);
+  font-weight: 600;
+}
+
+/* ======== 禁用按钮优化 ======== */
+.btn-primary:disabled {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  opacity: 0.5;
+}
+
+.btn-danger:disabled {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  opacity: 0.5;
+}
+
+/* ======== 语法高亮（全局） ======== */
+.keyword {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.label {
+  color: var(--color-syntax-label);
+}
+
+.number {
+  color: var(--color-syntax-number);
+}
+
+.unit {
+  color: var(--color-primary);
+  font-weight: 500;
 }

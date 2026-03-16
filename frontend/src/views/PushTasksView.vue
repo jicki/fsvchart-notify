@@ -148,12 +148,4 @@ function handleCopy(task: PushTask) {
   color: var(--color-text-secondary);
   margin-bottom: var(--spacing-lg);
 }
-
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-md);
-  border-top: 1px solid var(--color-border);
-}
 </style>

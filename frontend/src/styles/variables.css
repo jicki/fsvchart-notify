@@ -82,6 +82,14 @@
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
 
+  /* 语法高亮 */
+  --color-syntax-label: #ec4899;
+  --color-syntax-number: #059669;
+
+  /* 遮罩/边框 */
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  --color-border-sidebar: rgba(255, 255, 255, 0.1);
+
   /* 侧边栏 */
   --sidebar-width: 240px;
   --sidebar-collapsed-width: 64px;

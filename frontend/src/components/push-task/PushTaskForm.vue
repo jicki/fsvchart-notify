@@ -160,18 +160,8 @@ function handleSubmit() {
   margin-bottom: var(--spacing-md);
 }
 
-.form-input {
-  width: 100%;
-}
-
 .time-range-select {
   max-width: 200px;
-}
-
-.form-hint {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-top: 4px;
 }
 
 .checkbox-group {

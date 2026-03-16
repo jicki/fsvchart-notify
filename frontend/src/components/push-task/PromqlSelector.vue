@@ -267,14 +267,4 @@ function updateConfig(promqlId: number, field: string, value: string | number) {
   width: 100%;
 }
 
-.form-hint {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-top: 4px;
-}
-
-:deep(.keyword) { color: var(--color-primary); font-weight: 500; }
-:deep(.label) { color: #ec4899; }
-:deep(.number) { color: #059669; }
-:deep(.unit) { color: var(--color-primary); font-weight: 500; }
 </style>
