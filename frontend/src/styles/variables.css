@@ -1,61 +1,88 @@
 :root {
-  /* 主色调 */
-  --color-primary: #007bff;
-  --color-primary-hover: #0056b3;
-  --color-success: #28a745;
-  --color-success-hover: #218838;
-  --color-danger: #dc3545;
-  --color-danger-hover: #c82333;
-  --color-warning: #ffc107;
-  --color-info: #17a2b8;
-  --color-purple: #6610f2;
-  --color-purple-hover: #520dc2;
+  /* 主色调 - Slate 色系 */
+  --color-primary: #475569;
+  --color-primary-hover: #334155;
+  --color-primary-light: #f1f5f9;
 
-  /* 背景色 */
-  --color-bg-page: #f5f5f5;
-  --color-bg-white: #fff;
-  --color-bg-light: #f8f9fa;
-  --color-bg-hover: #f8f9fa;
-  --color-bg-disabled: #cccccc;
-
-  /* 文字色 */
-  --color-text: #333;
-  --color-text-secondary: #666;
-  --color-text-muted: #6c757d;
-  --color-text-white: #fff;
-
-  /* 边框色 */
-  --color-border: #ddd;
-  --color-border-light: #e9ecef;
-  --color-border-table: #ccc;
+  /* 强调色 - Blue */
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-accent-light: #eff6ff;
 
   /* 状态色 */
-  --color-success-bg: #d4edda;
-  --color-success-text: #155724;
-  --color-error-bg: #f8d7da;
-  --color-error-text: #721c24;
-  --color-warning-bg: #fff3cd;
-  --color-warning-text: #856404;
-  --color-info-bg: #d1ecf1;
-  --color-info-text: #0c5460;
+  --color-success: #22c55e;
+  --color-success-hover: #16a34a;
+  --color-danger: #ef4444;
+  --color-danger-hover: #dc2626;
+  --color-warning: #f59e0b;
+  --color-warning-hover: #d97706;
+  --color-info: #06b6d4;
+  --color-info-hover: #0891b2;
+  --color-purple: #8b5cf6;
+  --color-purple-hover: #7c3aed;
+
+  /* 背景色 */
+  --color-bg-page: #f8fafc;
+  --color-bg-white: #fff;
+  --color-bg-light: #f1f5f9;
+  --color-bg-hover: #f8fafc;
+  --color-bg-disabled: #cbd5e1;
+  --color-bg-sidebar: #1e293b;
+  --color-bg-sidebar-hover: #334155;
+  --color-bg-sidebar-active: #475569;
+
+  /* 文字色 */
+  --color-text: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-text-white: #fff;
+  --color-text-sidebar: #cbd5e1;
+
+  /* 边框色 */
+  --color-border: #e2e8f0;
+  --color-border-light: #e2e8f0;
+  --color-border-focus: #94a3b8;
+  --color-border-table: #e2e8f0;
+
+  /* 状态背景色 */
+  --color-success-bg: #f0fdf4;
+  --color-success-text: #166534;
+  --color-error-bg: #fef2f2;
+  --color-error-text: #991b1b;
+  --color-warning-bg: #fffbeb;
+  --color-warning-text: #92400e;
+  --color-info-bg: #ecfeff;
+  --color-info-text: #155e75;
 
   /* 圆角 */
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   /* 间距 */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
-  --spacing-lg: 20px;
-  --spacing-xl: 30px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
 
-  /* 阴影 */
-  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.1);
-  --shadow-dropdown: 0 2px 5px rgba(0, 0, 0, 0.2);
+  /* 阴影 - Tailwind 风格多层阴影 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-dropdown: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
   /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+
+  /* 过渡 */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* 侧边栏 */
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
 }

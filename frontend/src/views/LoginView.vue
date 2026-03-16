@@ -1,12 +1,21 @@
 <template>
   <div class="login-container">
-    <div class="login-box">
-      <h2>fsvchart-notify 登录</h2>
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-brand">
+          <IconBarChart :size="32" />
+        </div>
+        <h2>FSVChart Notify</h2>
+        <p class="login-desc">监控图表推送管理平台</p>
+      </div>
+
       <div v-if="error" class="error-message">{{ error }}</div>
+
       <form @submit.prevent="handleLogin">
         <div class="form-group">
           <label for="username">用户名</label>
           <input
+            class="form-input"
             type="text"
             id="username"
             v-model="username"
@@ -17,6 +26,7 @@
         <div class="form-group">
           <label for="password">密码</label>
           <input
+            class="form-input"
             type="password"
             id="password"
             v-model="password"
@@ -24,7 +34,7 @@
             placeholder="请输入密码"
           />
         </div>
-        <button type="submit" :disabled="loading">
+        <button type="submit" class="btn btn-primary login-btn" :disabled="loading">
           {{ loading ? '登录中...' : '登录' }}
         </button>
       </form>
@@ -36,6 +46,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { IconBarChart } from '../components/icons'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -82,14 +93,94 @@ const handleLogin = async () => {
 </script>
 
 <style scoped>
-.login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: var(--color-bg-page, #f5f5f5); }
-.login-box { width: 400px; padding: 30px; background: white; border-radius: var(--radius-lg, 8px); box-shadow: var(--shadow-md, 0 2px 10px rgba(0, 0, 0, 0.1)); }
-h2 { text-align: center; margin-bottom: 24px; color: var(--color-text, #333); }
-.form-group { margin-bottom: 20px; }
-label { display: block; margin-bottom: 8px; font-weight: 500; }
-input { width: 100%; padding: 10px; border: 1px solid var(--color-border, #ddd); border-radius: var(--radius-md, 4px); font-size: 16px; }
-button { width: 100%; padding: 12px; background: var(--color-primary, #007bff); color: white; border: none; border-radius: var(--radius-md, 4px); font-size: 16px; cursor: pointer; transition: background 0.3s; }
-button:hover { background: var(--color-primary-hover, #0056b3); }
-button:disabled { background: var(--color-bg-disabled, #cccccc); cursor: not-allowed; }
-.error-message { background: var(--color-error-bg, #f8d7da); color: var(--color-error-text, #721c24); padding: 10px; border-radius: var(--radius-md, 4px); margin-bottom: 20px; }
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--color-bg-page);
+}
+
+.login-card {
+  width: 400px;
+  padding: 40px;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.login-header h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.login-desc {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.login-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.error-message {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  font-size: 14px;
+}
 </style>

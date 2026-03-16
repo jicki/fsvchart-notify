@@ -1,9 +1,14 @@
 <template>
-  <div class="tab-content">
-    <h3>Push Tasks</h3>
+  <div>
+    <div class="page-header">
+      <div>
+        <h3>推送任务</h3>
+        <p>管理定时图表推送任务</p>
+      </div>
+    </div>
 
-    <div v-if="tasks.length === 0 && !store.loading" class="no-data-message">
-      <p>暂无任务数据</p>
+    <div v-if="tasks.length === 0 && !store.loading" class="card empty-state">
+      <p>暂无任务数据，请创建新任务</p>
     </div>
 
     <!-- 创建任务表单 -->
@@ -16,8 +21,6 @@
       :is-editing="false"
       @submit="handleCreate"
     />
-
-    <hr />
 
     <!-- 编辑任务表单 -->
     <PushTaskForm
@@ -49,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { usePushTaskStore } from '../stores/pushTask'
 import { usePushTaskForm } from '../composables/usePushTaskForm'
 import { usePolling } from '../composables/usePolling'
@@ -60,18 +63,13 @@ import type { PushTask } from '../types'
 const store = usePushTaskStore()
 const tasks = computed(() => store.tasks)
 
-// 创建表单
 const createForm = usePushTaskForm()
-
-// 编辑表单
 const editForm = usePushTaskForm()
 const isEditing = ref(false)
 const editingTaskId = ref<number | null>(null)
 
-// 定期刷新
 usePolling(() => store.fetchAllData(), 30000)
 
-// 创建任务
 async function handleCreate(payload: Record<string, unknown>) {
   const success = await store.createTask(payload)
   if (success) {
@@ -79,7 +77,6 @@ async function handleCreate(payload: Record<string, unknown>) {
   }
 }
 
-// 开始编辑
 function startEdit(task: PushTask) {
   isEditing.value = true
   editingTaskId.value = task.id
@@ -93,7 +90,6 @@ function startEdit(task: PushTask) {
   }, 100)
 }
 
-// 更新任务
 async function handleUpdate(payload: Record<string, unknown>) {
   if (editingTaskId.value === null) return
   const success = await store.updateTask(editingTaskId.value, {
@@ -105,20 +101,22 @@ async function handleUpdate(payload: Record<string, unknown>) {
   }
 }
 
-// 取消编辑
 function cancelEdit() {
   isEditing.value = false
   editingTaskId.value = null
   editForm.resetForm()
 }
 
-// 复制任务
 function handleCopy(task: PushTask) {
   store.copyTask(task)
 }
 </script>
 
 <style scoped>
-.tab-content { border: 1px solid var(--color-border-table, #ccc); padding: 16px; margin-bottom: 24px; }
-.no-data-message { text-align: center; padding: 20px; background-color: var(--color-bg-page, #f5f5f5); border-radius: 4px; margin: 20px 0; }
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
 </style>

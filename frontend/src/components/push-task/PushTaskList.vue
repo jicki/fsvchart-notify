@@ -1,10 +1,10 @@
 <template>
-  <div class="task-list">
-    <h3>任务列表</h3>
-    <div v-if="tasks.length === 0" class="no-tasks">
-      <p>暂无任务，请创建新任务</p>
+  <div class="card" style="margin-top: var(--spacing-lg)">
+    <h4>任务列表</h4>
+    <div v-if="tasks.length === 0" class="empty">
+      暂无任务，请创建新任务
     </div>
-    <table v-else>
+    <table v-else class="data-table">
       <thead>
         <tr>
           <th>ID</th>
@@ -19,7 +19,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="task in tasks" :key="task.id" :class="{ 'editing-task': editingTaskId === task.id }">
+        <tr v-for="task in tasks" :key="task.id" :class="{ 'editing-row': editingTaskId === task.id }">
           <td>{{ task.id }}</td>
           <td>{{ task.name }}</td>
           <td>{{ getSourceName(task.source_id) }}</td>
@@ -31,52 +31,67 @@
                   {{ getWeekdayText(time.weekday) }} {{ time.send_time }}
                 </div>
               </template>
-              <div v-else class="no-times">未设置发送时间</div>
+              <span v-else class="text-muted">未设置</span>
             </div>
           </td>
           <td>
             <div v-if="task.promql_configs && task.promql_configs.length > 0" class="promql-configs">
               <div v-for="(config, index) in task.promql_configs" :key="index" class="promql-config-item">
                 <span class="promql-name">{{ config.promql_name }}</span>
-                <span v-if="config.display_order !== undefined && config.display_order !== 0" class="config-detail" style="color: #409eff;">(顺序: {{ config.display_order }})</span>
-                <span v-if="config.display_mode" class="config-detail" :style="{ color: config.display_mode === 'both' ? '#9c27b0' : (config.display_mode === 'text' ? '#f57c00' : '#1976d2') }">
-                  ({{ config.display_mode === 'chart' ? '图表' : config.display_mode === 'text' ? '文本' : '混合' }})
+                <span v-if="config.display_order !== undefined && config.display_order !== 0" class="config-tag">#{{ config.display_order }}</span>
+                <span v-if="config.display_mode" class="config-tag" :class="`mode-${config.display_mode}`">
+                  {{ config.display_mode === 'chart' ? '图表' : config.display_mode === 'text' ? '文本' : '混合' }}
                 </span>
-                <span v-if="config.initial_unit" class="config-detail">(初始单位: {{ config.initial_unit }})</span>
-                <span v-if="config.unit" class="config-detail">(单位: {{ config.unit }})</span>
-                <span v-if="config.custom_metric_label || config.metric_label" class="config-detail">
-                  (标签: {{ config.custom_metric_label || config.metric_label }})
+                <span v-if="config.initial_unit" class="config-tag">{{ config.initial_unit }}</span>
+                <span v-if="config.unit" class="config-tag">{{ config.unit }}</span>
+                <span v-if="config.custom_metric_label || config.metric_label" class="config-tag">
+                  {{ config.custom_metric_label || config.metric_label }}
                 </span>
               </div>
             </div>
-            <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-names">
-              <span v-for="(promqlId, index) in task.promql_ids" :key="promqlId" class="promql-tag">
-                {{ getPromqlName(promqlId) }}{{ index < task.promql_ids.length - 1 ? ', ' : '' }}
+            <div v-else-if="task.promql_ids && task.promql_ids.length > 0" class="promql-tags">
+              <span v-for="promqlId in task.promql_ids" :key="promqlId" class="badge badge-success">
+                {{ getPromqlName(promqlId) }}
               </span>
             </div>
-            <div v-else class="no-promql-selected"><span>未选择</span></div>
+            <span v-else class="text-muted">未选择</span>
           </td>
           <td>
-            <div v-if="task.bound_webhooks && task.bound_webhooks.length > 0" class="bound-webhooks">
-              <span v-for="(webhook, index) in task.bound_webhooks" :key="webhook.id" class="webhook-tag">
-                {{ webhook.name }}{{ index < task.bound_webhooks.length - 1 ? ', ' : '' }}
+            <div v-if="task.bound_webhooks && task.bound_webhooks.length > 0" class="webhook-tags">
+              <span v-for="webhook in task.bound_webhooks" :key="webhook.id" class="webhook-tag">
+                {{ webhook.name }}
               </span>
             </div>
-            <div v-else class="no-webhooks-bound"><span>未绑定</span></div>
+            <span v-else class="text-muted">未绑定</span>
           </td>
-          <td>{{ task.enabled ? '启用' : '禁用' }}</td>
           <td>
-            <div class="task-actions">
-              <button class="edit-btn" @click.prevent="$emit('edit', task)">编辑</button>
-              <button class="copy-btn" @click.prevent="$emit('copy', task)">复制</button>
-              <button class="run-btn" @click.prevent="$emit('run', task.id)">执行</button>
-              <button
-                :class="task.enabled ? 'disable-btn' : 'enable-btn'"
-                @click.prevent="$emit('toggle', task.id, !task.enabled)"
-              >
-                {{ task.enabled ? '禁用' : '启用' }}
+            <span :class="['badge', task.enabled ? 'badge-success' : 'badge-warning']">
+              {{ task.enabled ? '启用' : '禁用' }}
+            </span>
+          </td>
+          <td>
+            <div class="action-group">
+              <button class="btn-icon" @click.prevent="$emit('edit', task)" title="编辑">
+                <IconEdit :size="16" />
               </button>
-              <button class="delete-btn" @click.prevent="$emit('delete', task.id)">删除</button>
+              <button class="btn-icon" @click.prevent="$emit('copy', task)" title="复制" style="color: var(--color-purple)">
+                <IconCopy :size="16" />
+              </button>
+              <button class="btn-icon" @click.prevent="$emit('run', task.id)" title="执行" style="color: var(--color-success)">
+                <IconPlay :size="16" />
+              </button>
+              <button
+                class="btn-icon"
+                @click.prevent="$emit('toggle', task.id, !task.enabled)"
+                :title="task.enabled ? '禁用' : '启用'"
+                :style="{ color: task.enabled ? 'var(--color-warning)' : 'var(--color-text-muted)' }"
+              >
+                <IconToggleRight v-if="task.enabled" :size="16" />
+                <IconToggleLeft v-else :size="16" />
+              </button>
+              <button class="btn-icon" @click.prevent="$emit('delete', task.id)" title="删除" style="color: var(--color-danger)">
+                <IconTrash :size="16" />
+              </button>
             </div>
           </td>
         </tr>
@@ -87,6 +102,7 @@
 
 <script setup lang="ts">
 import { formatTimeRange, getWeekdayText } from '../../utils/formatters'
+import { IconEdit, IconCopy, IconPlay, IconToggleLeft, IconToggleRight, IconTrash } from '../icons'
 import type { PushTask } from '../../types'
 
 defineProps<{
@@ -106,28 +122,82 @@ defineEmits<{
 </script>
 
 <style scoped>
-.no-tasks { padding: 12px; background-color: var(--color-bg-light, #f8f9fa); border-radius: 4px; text-align: center; color: var(--color-text-muted, #6c757d); }
-table { margin-top: 10px; width: 100%; border-collapse: collapse; }
-th, td { border: 1px solid var(--color-border-table, #ccc); padding: 4px 8px; text-align: left; }
-.send-times-list { display: flex; flex-direction: column; gap: 0.25rem; }
-.send-time { font-size: 0.9em; color: var(--color-text-secondary, #666); }
-.no-times { font-style: italic; color: #999; }
-.promql-config-item { margin-bottom: 3px; }
-.promql-name { font-weight: 500; }
-.config-detail { font-size: 0.85em; margin-left: 4px; }
-.promql-tag { font-size: 0.9em; color: var(--color-success, #28a745); background-color: #f0f9f0; padding: 2px 6px; border-radius: 3px; margin-right: 3px; display: inline-block; margin-bottom: 3px; }
-.promql-names { display: flex; flex-wrap: wrap; max-width: 200px; gap: 3px; }
-.no-promql-selected, .no-webhooks-bound { color: var(--color-text-muted, #6c757d); font-style: italic; }
-.bound-webhooks { display: flex; flex-wrap: wrap; gap: 4px; }
-.webhook-tag { font-size: 0.9em; color: var(--color-primary-hover, #0056b3); }
-.task-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.task-actions button { padding: 4px 8px; font-size: 0.9em; border-radius: 4px; border: none; cursor: pointer; color: white; }
-.edit-btn { background-color: var(--color-info, #17a2b8); }
-.copy-btn { background-color: var(--color-purple, #6610f2); }
-.run-btn { background-color: var(--color-success, #28a745); }
-.disable-btn { background-color: var(--color-warning, #ffc107); color: #212529; }
-.enable-btn { background-color: var(--color-text-muted, #6c757d); }
-.delete-btn { background-color: var(--color-danger, #dc3545); }
-.task-actions button:hover { opacity: 0.9; }
-tr.editing-task { background-color: #e2f2fd !important; }
+h4 {
+  margin: 0 0 var(--spacing-md);
+  font-weight: 600;
+}
+
+.editing-row {
+  background-color: var(--color-accent-light) !important;
+}
+
+.text-muted {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.send-times-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.send-time {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.promql-configs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.promql-config-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.promql-name {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.config-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-bg-light);
+  color: var(--color-text-secondary);
+}
+
+.config-tag.mode-chart { color: var(--color-accent); }
+.config-tag.mode-text { color: var(--color-warning); }
+.config-tag.mode-both { color: var(--color-purple); }
+
+.promql-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.webhook-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.webhook-tag {
+  font-size: 13px;
+  color: var(--color-accent);
+}
+
+.action-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
 </style>

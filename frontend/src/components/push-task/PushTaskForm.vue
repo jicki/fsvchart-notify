@@ -1,20 +1,22 @@
 <template>
-  <div class="form-container" :class="{ 'edit-form': isEditing }">
+  <div class="card task-form" :class="{ 'edit-form': isEditing }">
     <h4>{{ isEditing ? '编辑任务' : '创建新的任务' }}</h4>
 
-    <div class="form-group">
-      <label>任务名称:</label>
-      <input type="text" v-model="form.name.value" placeholder="任务名称" />
-    </div>
+    <div class="form-section">
+      <div class="form-group">
+        <label>任务名称</label>
+        <input class="form-input" type="text" v-model="form.name.value" placeholder="任务名称" />
+      </div>
 
-    <div class="form-group">
-      <label>数据源:</label>
-      <select v-model="form.sourceId.value">
-        <option value="">请选择数据源</option>
-        <option v-for="source in sources" :key="source.id" :value="source.id">
-          {{ source.name }} ({{ source.url }})
-        </option>
-      </select>
+      <div class="form-group">
+        <label>数据源</label>
+        <select class="form-input" v-model="form.sourceId.value">
+          <option value="">请选择数据源</option>
+          <option v-for="source in sources" :key="source.id" :value="source.id">
+            {{ source.name }} ({{ source.url }})
+          </option>
+        </select>
+      </div>
     </div>
 
     <PromqlSelector
@@ -24,36 +26,37 @@
       v-model:configs="form.promqlConfigs.value"
     />
 
-    <div class="form-group">
-      <label>时间范围:</label>
-      <select v-model="form.timeRange.value" class="time-range-select">
-        <option value="1d">1 天</option>
-        <option value="5d">5 天</option>
-        <option value="7d">7 天</option>
-        <option value="15d">15 天</option>
-        <option value="30d">30 天</option>
-      </select>
-      <div class="form-hint">数据点已针对每个时间范围优化，确保图表清晰</div>
-    </div>
+    <div class="form-section">
+      <div class="form-group">
+        <label>时间范围</label>
+        <select class="form-input time-range-select" v-model="form.timeRange.value">
+          <option value="1d">1 天</option>
+          <option value="5d">5 天</option>
+          <option value="7d">7 天</option>
+          <option value="15d">15 天</option>
+          <option value="30d">30 天</option>
+        </select>
+        <div class="form-hint">数据点已针对每个时间范围优化，确保图表清晰</div>
+      </div>
 
-    <div class="form-group">
-      <label>选择图表模板:
-        <select v-model="form.chartTemplateId.value">
+      <div class="form-group">
+        <label>选择图表模板</label>
+        <select class="form-input" v-model="form.chartTemplateId.value">
           <option value="">-- 请选择图表模板 --</option>
           <option v-for="tmpl in chartTemplates" :key="tmpl.id" :value="tmpl.id">
             {{ tmpl.name }} ({{ tmpl.chart_type }})
           </option>
         </select>
-      </label>
-    </div>
+      </div>
 
-    <div class="form-group">
-      <label>消息标题: <input v-model="form.cardTitle.value" /></label>
-    </div>
+      <div class="form-group">
+        <label>消息标题</label>
+        <input class="form-input" v-model="form.cardTitle.value" />
+      </div>
 
-    <div class="form-group">
-      <label>卡片模板:
-        <select v-model="form.cardTemplate.value">
+      <div class="form-group">
+        <label>卡片模板</label>
+        <select class="form-input" v-model="form.cardTemplate.value">
           <option value="red">红色</option>
           <option value="carmine">粉色</option>
           <option value="orange">橙色</option>
@@ -64,21 +67,19 @@
           <option value="violet">紫红</option>
           <option value="grey">灰色</option>
         </select>
-      </label>
-    </div>
+      </div>
 
-    <div class="form-group">
-      <label>按钮文本:
-        <input v-model="form.buttonText.value" placeholder="例如: 节点池资源总览" />
-      </label>
-      <small>自定义卡片底部按钮的文本，留空则使用默认值</small>
-    </div>
+      <div class="form-group">
+        <label>按钮文本</label>
+        <input class="form-input" v-model="form.buttonText.value" placeholder="例如: 节点池资源总览" />
+        <div class="form-hint">自定义卡片底部按钮的文本，留空则使用默认值</div>
+      </div>
 
-    <div class="form-group">
-      <label>按钮链接:
-        <input v-model="form.buttonURL.value" placeholder="例如: https://grafana.example.com/d/xxx" />
-      </label>
-      <small>自定义卡片底部按钮的链接URL，留空则使用默认值</small>
+      <div class="form-group">
+        <label>按钮链接</label>
+        <input class="form-input" v-model="form.buttonURL.value" placeholder="例如: https://grafana.example.com/d/xxx" />
+        <div class="form-hint">自定义卡片底部按钮的链接URL，留空则使用默认值</div>
+      </div>
     </div>
 
     <WebhookSelector
@@ -93,19 +94,20 @@
       @remove="form.removeSendTime"
     />
 
-    <div class="form-group">
-      <label>
-        <input type="checkbox" v-model="form.showDataLabel.value" />
-        显示曲线数值
+    <div class="form-group checkbox-group">
+      <label class="toggle">
+        <input type="checkbox" v-model="form.showDataLabel.value">
+        <span class="toggle-track"></span>
+        <span>显示曲线数值</span>
       </label>
-      <small>在图表中显示数据点的具体数值</small>
+      <div class="form-hint">在图表中显示数据点的具体数值</div>
     </div>
 
-    <div v-if="isEditing" class="edit-actions">
-      <button @click.prevent="handleSubmit" class="update-btn">保存修改</button>
-      <button @click.prevent="$emit('cancel')" class="cancel-btn">取消</button>
+    <div class="form-actions">
+      <button v-if="isEditing" class="btn btn-primary" @click.prevent="handleSubmit">保存修改</button>
+      <button v-if="isEditing" class="btn btn-secondary" @click.prevent="$emit('cancel')">取消</button>
+      <button v-if="!isEditing" class="btn btn-primary" @click.prevent="handleSubmit">创建并发送</button>
     </div>
-    <button v-else @click.prevent="handleSubmit" class="create-btn">创建并发送</button>
   </div>
 </template>
 
@@ -138,18 +140,49 @@ function handleSubmit() {
 </script>
 
 <style scoped>
-.form-container { padding: 15px; border: 1px solid var(--color-border, #ddd); border-radius: 4px; background-color: var(--color-bg-light, #f8f9fa); margin-bottom: 20px; }
-.edit-form { margin-top: 20px; border: 1px solid #dee2e6; }
-.edit-form h4 { margin-top: 0; color: var(--color-success, #28a745); border-bottom: 2px solid var(--color-success, #28a745); padding-bottom: 10px; margin-bottom: 20px; }
-.form-group { margin-bottom: 15px; }
-.form-hint { font-size: 0.85em; color: var(--color-text-secondary, #666); margin-top: 5px; }
-.time-range-select { width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background-color: white; cursor: pointer; }
-.create-btn { margin-top: 15px; padding: 10px 20px; background-color: var(--color-success, #4CAF50); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
-.create-btn:hover { background-color: var(--color-success-hover, #45a049); }
-.edit-actions { display: flex; justify-content: space-between; margin-top: 15px; }
-.update-btn, .cancel-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
-.update-btn { background-color: var(--color-success, #28a745); color: white; }
-.update-btn:hover { background-color: var(--color-success-hover, #218838); }
-.cancel-btn { background-color: var(--color-danger, #dc3545); color: white; }
-.cancel-btn:hover { background-color: var(--color-danger-hover, #c82333); }
+.task-form {
+  margin-bottom: var(--spacing-lg);
+}
+
+.task-form h4 {
+  margin: 0 0 var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.edit-form h4 {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.form-section {
+  margin-bottom: var(--spacing-md);
+}
+
+.form-input {
+  width: 100%;
+}
+
+.time-range-select {
+  max-width: 200px;
+}
+
+.form-hint {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.checkbox-group {
+  margin-top: var(--spacing-md);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
 </style>

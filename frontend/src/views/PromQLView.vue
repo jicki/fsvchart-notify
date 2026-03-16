@@ -1,62 +1,65 @@
 <template>
   <div>
-    <h3>PromQL 查询管理</h3>
-    <p>在这里管理预定义的 PromQL 查询，可以在创建任务时直接选择使用。</p>
-
-    <!-- 全局展开/收起按钮 -->
-    <div class="global-actions">
-      <button class="action-btn" @click="expandable.toggleAll(promqls.map(p => p.id))">
-        {{ expandable.isAllExpandedFor(promqls.length) ? '收起所有查询' : '展开所有查询' }}
-      </button>
+    <div class="page-header">
+      <div>
+        <h3>PromQL 查询管理</h3>
+        <p>管理预定义的 PromQL 查询，可在创建任务时直接选择使用</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" @click="expandable.toggleAll(promqls.map(p => p.id))">
+          <IconChevronDown v-if="!expandable.isAllExpandedFor(promqls.length)" :size="16" />
+          <IconChevronUp v-else :size="16" />
+          {{ expandable.isAllExpandedFor(promqls.length) ? '收起所有' : '展开所有' }}
+        </button>
+        <button v-if="!showAddForm" class="btn btn-primary" @click="showAddForm = true">
+          <IconPlus :size="16" />
+          添加查询
+        </button>
+      </div>
     </div>
 
-    <!-- 添加/编辑 PromQL 表单 -->
-    <div class="form-container" v-if="showAddForm">
-      <h4>{{ isEditing ? '编辑' : '添加' }} PromQL 查询</h4>
+    <!-- 添加/编辑表单 -->
+    <div v-if="showAddForm" class="card" style="margin-bottom: var(--spacing-lg)">
+      <h4 style="margin-top: 0; margin-bottom: var(--spacing-md)">{{ isEditing ? '编辑' : '添加' }} PromQL 查询</h4>
       <div class="form-group">
-        <label>名称:</label>
-        <input type="text" v-model="formData.name" placeholder="查询名称" />
+        <label>名称</label>
+        <input class="form-input" type="text" v-model="formData.name" placeholder="查询名称" />
       </div>
       <div class="form-group">
-        <label>分类:</label>
-        <input type="text" v-model="formData.category" placeholder="查询分类" />
+        <label>分类</label>
+        <input class="form-input" type="text" v-model="formData.category" placeholder="查询分类" />
       </div>
       <div class="form-group">
-        <label>描述:</label>
-        <textarea v-model="formData.description" placeholder="查询描述"></textarea>
+        <label>描述</label>
+        <textarea class="form-input" v-model="formData.description" placeholder="查询描述"></textarea>
       </div>
       <div class="form-group">
-        <label>PromQL 查询:</label>
-        <textarea v-model="formData.query" placeholder="PromQL 查询语句" rows="5"></textarea>
+        <label>PromQL 查询</label>
+        <textarea class="form-input promql-textarea" v-model="formData.query" placeholder="PromQL 查询语句" rows="5"></textarea>
         <div v-if="formData.query" class="promql-preview">
-          <h5>语法高亮预览:</h5>
+          <h5>语法高亮预览</h5>
           <pre class="promql-code" v-html="highlightPromQL(formData.query)"></pre>
         </div>
       </div>
       <div class="form-actions">
-        <button @click="savePromQL">保存</button>
-        <button @click="cancelEdit">取消</button>
+        <button class="btn btn-primary" @click="savePromQL">保存</button>
+        <button class="btn btn-secondary" @click="cancelEdit">取消</button>
       </div>
     </div>
 
-    <!-- 添加按钮 -->
-    <div class="action-buttons" v-if="!showAddForm">
-      <button @click="showAddForm = true">添加 PromQL 查询</button>
-    </div>
-
     <!-- PromQL 列表 -->
-    <div class="promql-list">
-      <table>
+    <div class="card">
+      <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>名称</th>
-            <th>分类</th>
-            <th>描述</th>
-            <th>查询语句</th>
-            <th>创建时间</th>
-            <th>更新时间</th>
-            <th>操作</th>
+            <th style="width: 5%">ID</th>
+            <th style="width: 10%">名称</th>
+            <th style="width: 10%">分类</th>
+            <th style="width: 15%">描述</th>
+            <th style="width: 30%">查询语句</th>
+            <th style="width: 10%">创建时间</th>
+            <th style="width: 10%">更新时间</th>
+            <th style="width: 10%">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -64,27 +67,35 @@
             <td>{{ promql.id }}</td>
             <td>{{ promql.name }}</td>
             <td>{{ promql.category }}</td>
-            <td>{{ promql.description }}</td>
+            <td class="text-ellipsis">{{ promql.description }}</td>
             <td>
-              <div class="query-cell" :class="{ 'expanded': expandable.isExpanded(promql.id) }">
+              <div class="query-cell" :class="{ expanded: expandable.isExpanded(promql.id) }">
                 <pre class="promql-code" v-html="highlightPromQL(promql.query)"></pre>
-                <button class="expand-btn" @click="expandable.toggle(promql.id)">
-                  {{ expandable.isExpanded(promql.id) ? '收起' : '展开' }}
+                <button class="btn-icon expand-toggle" @click="expandable.toggle(promql.id)">
+                  <IconChevronDown v-if="!expandable.isExpanded(promql.id)" :size="14" />
+                  <IconChevronUp v-else :size="14" />
                 </button>
               </div>
             </td>
             <td>{{ formatDate(promql.created_at) }}</td>
             <td>{{ formatDate(promql.updated_at) }}</td>
-            <td class="action-column">
-              <div class="action-buttons">
-                <button class="action-btn edit" @click="startEdit(promql)">编辑</button>
-                <button class="action-btn copy" @click="copyPromQL(promql)">复制</button>
-                <button class="action-btn delete" @click="deletePromQL(promql.id)">删除</button>
+            <td>
+              <div class="action-group">
+                <button class="btn-icon" @click="startEdit(promql)" title="编辑">
+                  <IconEdit :size="16" />
+                </button>
+                <button class="btn-icon" @click="copyPromQL(promql)" title="复制" style="color: var(--color-purple)">
+                  <IconCopy :size="16" />
+                </button>
+                <button class="btn-icon" @click="deletePromQL(promql.id)" title="删除" style="color: var(--color-danger)">
+                  <IconTrash :size="16" />
+                </button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
+      <div v-if="promqls.length === 0" class="empty">暂无 PromQL 查询</div>
     </div>
   </div>
 </template>
@@ -97,11 +108,8 @@ import { useNotification } from '../composables/useNotification'
 import { usePolling } from '../composables/usePolling'
 import { useExpandable } from '../composables/useExpandable'
 import { usePromqlHighlight } from '../composables/usePromqlHighlight'
+import { IconPlus, IconEdit, IconTrash, IconCopy, IconChevronDown, IconChevronUp } from '../components/icons'
 import type { PromQL } from '../types'
-
-const emit = defineEmits<{
-  'promql-updated': []
-}>()
 
 const { showSuccess, showError } = useNotification()
 const expandable = useExpandable()
@@ -119,7 +127,6 @@ const formData = reactive({
   category: ''
 })
 
-// 获取 PromQL 列表
 async function fetchPromQLs() {
   try {
     const data = await get<PromQL[]>('/api/promqls')
@@ -134,7 +141,6 @@ async function fetchPromQLs() {
 
 usePolling(fetchPromQLs, 30000)
 
-// 保存 PromQL
 async function savePromQL() {
   if (!formData.name || !formData.query) {
     showError('名称和查询语句不能为空')
@@ -158,13 +164,11 @@ async function savePromQL() {
     }
     cancelEdit()
     await fetchPromQLs()
-    emit('promql-updated')
   } catch (err: unknown) {
     showError(err instanceof Error ? err.message : '保存PromQL查询失败')
   }
 }
 
-// 开始编辑
 function startEdit(promql: PromQL) {
   editingId.value = promql.id
   formData.name = promql.name
@@ -175,7 +179,6 @@ function startEdit(promql: PromQL) {
   showAddForm.value = true
 }
 
-// 取消编辑
 function cancelEdit() {
   editingId.value = null
   formData.name = ''
@@ -186,7 +189,6 @@ function cancelEdit() {
   showAddForm.value = false
 }
 
-// 删除 PromQL
 async function deletePromQL(id: number) {
   if (!confirm('确定要删除这个 PromQL 查询吗？如果有任务正在使用它，将无法删除。')) {
     return
@@ -196,14 +198,12 @@ async function deletePromQL(id: number) {
     await del(`/api/promql/${id}`)
     showSuccess('PromQL 删除成功')
     await fetchPromQLs()
-    emit('promql-updated')
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '删除PromQL查询失败'
     showError(`删除失败: ${message}`)
   }
 }
 
-// 复制 PromQL
 async function copyPromQL(promql: PromQL) {
   try {
     await post('/api/promql', {
@@ -221,113 +221,34 @@ async function copyPromQL(promql: PromQL) {
 </script>
 
 <style scoped>
-.global-actions {
-  margin: var(--spacing-lg) 0;
+.header-actions {
   display: flex;
-  justify-content: flex-end;
-}
-
-.form-container {
-  margin-bottom: var(--spacing-lg);
-  padding: 15px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-light);
-}
-
-.form-group {
-  margin-bottom: 15px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 5px;
-  font-weight: bold;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  gap: 8px;
+  align-items: center;
 }
 
 .form-actions {
   display: flex;
-  gap: 10px;
-}
-
-.action-buttons {
-  margin-bottom: var(--spacing-lg);
-}
-
-.promql-list {
-  margin-top: var(--spacing-lg);
-}
-
-.action-column {
-  width: 200px;
-  white-space: nowrap;
-  padding: 8px 4px;
-}
-
-.action-buttons {
-  display: flex;
   gap: 8px;
-  justify-content: flex-start;
-  flex-wrap: nowrap;
 }
 
-.action-btn {
-  padding: 4px 10px;
+.promql-textarea {
+  font-family: var(--font-mono);
+  resize: vertical;
+}
+
+.promql-preview {
+  margin-top: var(--spacing-sm);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-light);
+}
+
+.promql-preview h5 {
+  margin: 0 0 8px;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  transition: all 0.3s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 50px;
-  background-color: var(--color-bg-white);
-  white-space: nowrap;
-}
-
-.action-btn:hover {
-  background-color: var(--color-bg-hover);
-  border-color: #adb5bd;
-}
-
-.action-btn.edit {
-  color: var(--color-text-white);
-  background-color: #2196F3;
-  border-color: #2196F3;
-}
-
-.action-btn.edit:hover {
-  background-color: #1976D2;
-}
-
-.action-btn.copy {
-  color: var(--color-text-white);
-  background-color: var(--color-success);
-  border-color: var(--color-success);
-}
-
-.action-btn.copy:hover {
-  background-color: var(--color-success-hover);
-}
-
-.action-btn.delete {
-  color: var(--color-text-white);
-  background-color: var(--color-danger);
-  border-color: var(--color-danger);
-}
-
-.action-btn.delete:hover {
-  background-color: var(--color-danger-hover);
 }
 
 .query-cell {
@@ -335,16 +256,23 @@ async function copyPromQL(promql: PromQL) {
   max-width: 500px;
   background: var(--color-bg-light);
   border-radius: var(--radius-md);
-  padding: 12px;
-  transition: all 0.3s ease;
+  padding: var(--spacing-sm) var(--spacing-md);
+  transition: all var(--transition-normal);
   margin: 4px 0;
   overflow: hidden;
+  max-height: 80px;
 }
 
 .query-cell.expanded {
   max-width: none;
-  width: auto;
+  max-height: none;
   min-width: 500px;
+}
+
+.expand-toggle {
+  position: absolute;
+  right: 4px;
+  top: 4px;
 }
 
 .promql-code {
@@ -358,102 +286,36 @@ async function copyPromQL(promql: PromQL) {
   padding: 4px;
 }
 
-.expand-btn {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  background: var(--color-border-light);
-  border: 1px solid #ced4da;
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  opacity: 0.8;
-  transition: all 0.2s ease;
-  color: #495057;
-  z-index: 1;
-}
-
-.expand-btn:hover {
-  opacity: 1;
-  background: #dee2e6;
-}
-
-/* PromQL 语法高亮样式 */
-:deep(.keyword) {
-  color: #0066cc;
-  font-weight: 500;
-}
-
-:deep(.label) {
-  color: #e83e8c;
-}
-
-:deep(.number) {
-  color: #2e7d32;
-}
-
-:deep(.unit) {
-  color: #0066cc;
-  font-weight: 500;
-}
-
-.promql-preview {
-  margin-top: 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 10px;
-  background-color: var(--color-bg-light);
-}
-
-.promql-preview h5 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #495057;
-  font-size: 14px;
-}
-
-td {
-  vertical-align: middle;
-  padding: 8px 4px;
-  max-width: 100%;
+.text-ellipsis {
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-table {
-  table-layout: fixed;
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+.action-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
 }
 
-thead th {
-  padding: 12px 8px;
-  white-space: nowrap;
-  background: var(--color-bg-light);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  border-bottom: 2px solid #dee2e6;
+/* PromQL 语法高亮 */
+:deep(.keyword) {
+  color: var(--color-primary);
+  font-weight: 500;
 }
 
-th:nth-child(1) { width: 5%; }
-th:nth-child(2) { width: 10%; }
-th:nth-child(3) { width: 10%; }
-th:nth-child(4) { width: 15%; }
-th:nth-child(5) { width: 30%; }
-th:nth-child(6) { width: 10%; }
-th:nth-child(7) { width: 10%; }
-th:nth-child(8) { width: 10%; }
-
-tbody tr:hover {
-  background-color: var(--color-bg-hover);
+:deep(.label) {
+  color: #ec4899;
 }
 
-tbody td {
-  border-bottom: 1px solid #dee2e6;
+:deep(.number) {
+  color: #059669;
+}
+
+:deep(.unit) {
+  color: var(--color-primary);
+  font-weight: 500;
 }
 
 @media (max-width: 1200px) {

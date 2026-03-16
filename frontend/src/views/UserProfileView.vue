@@ -1,57 +1,62 @@
 <template>
   <div class="profile-container">
-    <h2>用户信息</h2>
+    <div class="page-header">
+      <div>
+        <h3>用户信息</h3>
+        <p>管理个人信息和安全设置</p>
+      </div>
+    </div>
 
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else-if="error" class="error-message">{{ error }}</div>
 
-    <div v-if="user" class="profile-content">
-      <div class="profile-section">
-        <h3>基本信息</h3>
+    <div v-if="user" class="profile-grid">
+      <div class="card">
+        <h4>基本信息</h4>
         <form @submit.prevent="updateProfile">
           <div class="form-group">
             <label for="username">用户名</label>
-            <input type="text" id="username" v-model="user.username" disabled />
+            <input class="form-input" type="text" id="username" v-model="user.username" disabled />
           </div>
           <div class="form-group">
             <label for="displayName">显示名称</label>
-            <input type="text" id="displayName" v-model="user.display_name" />
+            <input class="form-input" type="text" id="displayName" v-model="user.display_name" />
           </div>
           <div class="form-group">
             <label for="email">邮箱</label>
-            <input type="email" id="email" v-model="user.email" />
+            <input class="form-input" type="email" id="email" v-model="user.email" />
           </div>
           <div class="form-group">
             <label for="role">角色</label>
-            <input type="text" id="role" v-model="user.role" disabled />
+            <input class="form-input" type="text" id="role" v-model="user.role" disabled />
           </div>
-          <button type="submit" :disabled="profileLoading">
+          <button type="submit" class="btn btn-primary" :disabled="profileLoading">
             {{ profileLoading ? '更新中...' : '更新信息' }}
           </button>
-          <div v-if="profileSuccess" class="success-message">信息更新成功！</div>
+          <div v-if="profileSuccess" class="success-message">信息更新成功</div>
           <div v-if="profileError" class="error-message">{{ profileError }}</div>
         </form>
       </div>
 
-      <div class="profile-section">
-        <h3>修改密码</h3>
+      <div class="card">
+        <h4>修改密码</h4>
         <form @submit.prevent="changePassword">
           <div class="form-group">
             <label for="oldPassword">当前密码</label>
-            <input type="password" id="oldPassword" v-model="passwordForm.oldPassword" required />
+            <input class="form-input" type="password" id="oldPassword" v-model="passwordForm.oldPassword" required />
           </div>
           <div class="form-group">
             <label for="newPassword">新密码</label>
-            <input type="password" id="newPassword" v-model="passwordForm.newPassword" required minlength="6" />
+            <input class="form-input" type="password" id="newPassword" v-model="passwordForm.newPassword" required minlength="6" />
           </div>
           <div class="form-group">
             <label for="confirmPassword">确认新密码</label>
-            <input type="password" id="confirmPassword" v-model="passwordForm.confirmPassword" required />
+            <input class="form-input" type="password" id="confirmPassword" v-model="passwordForm.confirmPassword" required />
           </div>
-          <button type="submit" :disabled="passwordLoading">
+          <button type="submit" class="btn btn-primary" :disabled="passwordLoading">
             {{ passwordLoading ? '更新中...' : '修改密码' }}
           </button>
-          <div v-if="passwordSuccess" class="success-message">密码修改成功！</div>
+          <div v-if="passwordSuccess" class="success-message">密码修改成功</div>
           <div v-if="passwordError" class="error-message">{{ passwordError }}</div>
         </form>
       </div>
@@ -151,20 +156,31 @@ onMounted(fetchUserInfo)
 </script>
 
 <style scoped>
-.profile-container { max-width: 800px; margin: 0 auto; padding: 20px; }
-h2 { margin-bottom: 24px; color: var(--color-text, #333); }
-.loading { text-align: center; padding: 20px; color: var(--color-text-secondary, #666); }
-.profile-content { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-.profile-section { background: white; border-radius: var(--radius-lg, 8px); padding: 20px; box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.1)); }
-h3 { margin-top: 0; margin-bottom: 20px; color: var(--color-text, #333); border-bottom: 1px solid #eee; padding-bottom: 10px; }
-.form-group { margin-bottom: 15px; }
-label { display: block; margin-bottom: 5px; font-weight: 500; }
-input { width: 100%; padding: 8px; border: 1px solid var(--color-border, #ddd); border-radius: var(--radius-md, 4px); }
-input:disabled { background-color: var(--color-bg-page, #f5f5f5); cursor: not-allowed; }
-button { padding: 10px 15px; background: var(--color-primary, #007bff); color: white; border: none; border-radius: var(--radius-md, 4px); cursor: pointer; margin-top: 10px; }
-button:hover { background: var(--color-primary-hover, #0056b3); }
-button:disabled { background: var(--color-bg-disabled, #cccccc); cursor: not-allowed; }
-.success-message { margin-top: 10px; padding: 8px; background: var(--color-success-bg, #d4edda); color: var(--color-success-text, #155724); border-radius: var(--radius-md, 4px); }
-.error-message { margin-top: 10px; padding: 8px; background: var(--color-error-bg, #f8d7da); color: var(--color-error-text, #721c24); border-radius: var(--radius-md, 4px); }
-@media (max-width: 768px) { .profile-content { grid-template-columns: 1fr; } }
+.profile-container {
+  max-width: 900px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.card h4 {
+  margin: 0 0 var(--spacing-lg);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.form-input {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
