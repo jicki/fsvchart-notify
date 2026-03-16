@@ -181,6 +181,11 @@ func AuthenticateUser(username, password string) (*models.User, error) {
 					db.Exec(`UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, newRole, user.ID)
 					user.Role = newRole
 				}
+				// 同步 auth_source 为 ldap
+				if user.AuthSource != "ldap" {
+					db.Exec(`UPDATE users SET auth_source = 'ldap' WHERE id = ?`, user.ID)
+					user.AuthSource = "ldap"
+				}
 				return &user, nil
 			}
 		}
